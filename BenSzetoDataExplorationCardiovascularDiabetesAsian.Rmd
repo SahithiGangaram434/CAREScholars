@@ -147,3 +147,78 @@ library(janitor)
 
 
 ```
+
+
+
+##Data Processing/Intial Univariate Analysis
+```{r}
+race_sub_data<-data%>%
+  mutate(racea=as_factor(RACEA))#%>%
+  #filter(racea%in%c("White", "Filipino", "Chinese", "Asian Indian", "Korean", "Vietnamese", "Japanese", "Pacific Islander"))
+
+data.frame(table(race_sub_data$racea))%>%#Freq table of different Asian Races. As you can see only Filipino, Chinese, Asian Indian. Remove above # to see more
+  arrange(desc(Freq))
+
+```
+
+```{r}
+
+data10k<-data10k%>%#New variable called sex based on SEX variable
+  mutate(sex=case_when(SEX==1~"male",
+                       SEX==2~"female",
+                       SEX%in%c(7,8,9)~"Unknown")#Single value for all reason unknown
+         )
+data10k%>%#bar plot for sex
+  ggplot(aes(x=sex))+
+  geom_bar()
+
+data10k$RACEA2<-as_factor(data10k$RACEA)
+
+data10k<-data10k%>%#new column that uses labels for race rather than code
+  mutate(racea=as_factor(RACEA))
+
+data10k%>% #Race bar plot
+   ggplot(aes(x=racea))+
+  geom_bar()
+
+
+data.frame(prop.table(table(data10k$racea))*100)%>%rename(Percent=Freq)%>%arrange(desc(Percent)) # GO BACK AND TRY TO DO W/ JANITOR PACKAGE WITH LAPPLY
+
+
+```
+
+
+
+Model Practice
+
+```{r}
+table(data$CHEARTDIEV)
+unique(data$CHEARTDIEV)
+```
+```{r}
+
+CHEARTDIEV_data<-data%>%
+  filter(CHEARTDIEV%in%c(1,2))%>%
+  mutate(CHEARTDIEV_binary=case_when(CHEARTDIEV==1~0,
+                                     CHEARTDIEV==2~1))
+
+table(CHEARTDIEV_data$CHEARTDIEV_binary)
+
+CHEARTDIEV_glm<-glm(CHEARTDIEV_binary~BMI, data=CHEARTDIEV_data, family="binomial")
+
+summary(CHEARTDIEV_glm)
+
+#Testing residuals
+
+CHEARTDIEV_aug<-augment(CHEARTDIEV_glm,CHEARTDIEV_data)%>%
+  dplyr::mutate(.resp.resid=resid(CHEARTDIEV_glm, type="response"))
+
+arm::binnedplot(CHEARTDIEV_aug$BMI, CHEARTDIEV_aug$.resp.resid, col.int = NULL)#Clear trend need to apply transformation
+
+library(ggformula)
+
+CHEARTDIEV_bmi <- ggpredict(CHEARTDIEV_glm, terms = c("BMI"))
+
+plot(CHEARTDIEV_bmi)#Be sure to limit x axis domain
+
+```
