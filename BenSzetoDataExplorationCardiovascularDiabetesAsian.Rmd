@@ -1,0 +1,149 @@
+---
+title: "Data Exploration Diabetes Cardiovascular Mortality"
+author: "Ben Szeto"
+date: "2024-06-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# NOTE: To load data, you must download both the extract's data and the DDI
+# and also set the working directory to the folder with these files (or change the path below).
+
+if (!require("ipumsr")) stop("Reading IPUMS data into R requires the ipumsr package. It can be installed using the following command: install.packages('ipumsr')")
+
+ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00027.xml")
+
+#"C:\Users\bszet\OneDrive\Documents\Stanford Care Scholars\Diabetes Cardiovascular Outcomes\Data\nhis_00025.xml"
+
+#"C:\Users\bszet\OneDrive\Documents\Stanford Care Scholars\Diabetes Cardiovascular Outcomes\Data\nhis_00025.dat"
+data <- read_ipums_micro(ddi)
+```
+
+
+```{r}
+library(tidyverse)
+library(knitr)
+library(plotly)
+```
+
+```{r}
+set.seed(100)
+data10k<-data%>%sample_n(10000)#Taking 10,000 random rows from data
+
+```
+
+```{r}
+data10k%>% #Note this is from the random sample data so there may be things missing from the population
+  lapply(unique)
+```
+
+```{r} 
+
+#Counting number of levels for each variable
+data10k%>% #Note this is from the random sample data so there may be things missing from the population
+  sapply(function(x) length(unique(x)))
+
+```
+
+```{r}
+head(data10k)
+
+nrow(data10k)
+
+table(data10k$SEX)
+table(data10k$SEX)
+table(data10k$RACEA)
+
+nrow(data10k%>%filter(BMICALC==0))
+nrow(data10k%>%filter(BMI==0))
+
+
+
+data10k%>% #Checking distribution of BMI CALC; How many 0 and 996?
+  mutate(BMI_Terms=ifelse(!BMICALC %in% c(0,996), "Within Range", BMICALC))%>%
+  group_by(BMI_Terms)%>%
+  summarize(
+    n()
+  )
+
+data10k%>% #What does BMI do when BMI CALC is 996
+  filter(BMICALC==996)%>%
+  select(BMICALC, BMI,HEIGHT, WEIGHT)%>%
+  arrange(desc(BMI))
+
+```
+
+```{r}
+table(data10k$USBORN)
+
+```
+
+```{r}
+
+
+#Distribution of BMICALC
+ggplotly(
+data10k%>%
+  ggplot(aes(x=BMICALC))+
+  geom_histogram(binwidth = 1)
+)
+
+data10k%>% #checking normality of BMICALC removing 0 and 996
+  filter(!BMICALC %in% c(0, 996))%>%
+  ggplot(aes(sample=BMICALC))+
+  geom_qq()+
+  geom_qq_line()
+
+data10k%>% #checking normality of BMICALC removing 0 and 996
+  filter(!BMICALC %in% c(0, 996))%>%
+  ggplot(aes(x=BMICALC))+
+  geom_histogram()
+
+
+
+```
+```{r}
+library(corrplot)
+cordata<-data10k%>%
+  select(YEAR, AGE, SEX, MARSTCUR, RACEA, HISPYN, USBORN, EDUCREC2, EMPSTAT, POORYN, EARNINGS, OWNERSHIP, BMICALC, HEIGHT, WEIGHT, CHEARTDIEV, DIABETICEV, HEARTATTEV, HEARTCONEV, STROKEV, ALCSTAT1, SMOKESTATUS2, MOD10DMIN)
+cordata_cor<-cor(cordata)
+
+
+cordata_cor
+corrplot(cordata_cor)
+```
+
+
+
+
+
+```{r prevalences of diseases}
+
+# 
+#   pivot_longer(
+#     NHISHID,
+#     names_to="Variable",
+#     values_to="Level"
+#   )
+
+```
+
+```{r disease prevalence}
+
+
+data10k%>%
+  select(CHEARTDIEV, DIABETICEV, HEARTATTEV, HEARTCONEV, STROKEV, ALCSTAT1, SMOKESTATUS2, MOD10DMIN)%>% #Columns you want to make a frequency table for
+  lapply(table)
+
+
+```
+
+```{r}
+library(janitor)
+
+
+```
