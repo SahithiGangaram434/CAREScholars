@@ -210,7 +210,7 @@ table(CHEARTDIEV_data$CHEARTDIEV_binary)
 
 CHEARTDIEV_glm<-glm(CHEARTDIEV_binary~BMI+racea+BMI:racea, data=CHEARTDIEV_data, family="binomial")
 
-summary(CHEARTDIEV_glm)
+summary(CHEARTDIEV_glm)#base case is white with 0 BMI
 
 #Testing residuals
 
