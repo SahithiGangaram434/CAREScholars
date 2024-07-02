@@ -28,6 +28,8 @@ data <- read_ipums_micro(ddi)
 library(tidyverse)
 library(knitr)
 library(plotly)
+library(ggeffects)
+library(ggformula)
 ```
 
 ```{r}
@@ -200,11 +202,13 @@ unique(data$CHEARTDIEV)
 CHEARTDIEV_data<-data%>%
   filter(CHEARTDIEV%in%c(1,2))%>%
   mutate(CHEARTDIEV_binary=case_when(CHEARTDIEV==1~0,
-                                     CHEARTDIEV==2~1))
+                                     CHEARTDIEV==2~1))%>%
+  mutate(racea=as_factor(RACEA))%>%
+  filter(racea%in%c("White", "Filipino", "Chinese", "Asian Indian"))
 
 table(CHEARTDIEV_data$CHEARTDIEV_binary)
 
-CHEARTDIEV_glm<-glm(CHEARTDIEV_binary~BMI, data=CHEARTDIEV_data, family="binomial")
+CHEARTDIEV_glm<-glm(CHEARTDIEV_binary~BMI+racea+BMI:racea, data=CHEARTDIEV_data, family="binomial")
 
 summary(CHEARTDIEV_glm)
 
@@ -215,9 +219,9 @@ CHEARTDIEV_aug<-augment(CHEARTDIEV_glm,CHEARTDIEV_data)%>%
 
 arm::binnedplot(CHEARTDIEV_aug$BMI, CHEARTDIEV_aug$.resp.resid, col.int = NULL)#Clear trend need to apply transformation
 
-library(ggformula)
 
-CHEARTDIEV_bmi <- ggpredict(CHEARTDIEV_glm, terms = c("BMI"))
+
+CHEARTDIEV_bmi <- ggpredict(CHEARTDIEV_glm, terms = c("BMI", "racea"))
 
 plot(CHEARTDIEV_bmi)#Be sure to limit x axis domain
 
