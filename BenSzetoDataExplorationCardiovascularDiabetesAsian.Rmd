@@ -182,7 +182,7 @@ data.frame(prop.table(table(data10k$racea))*100)%>%rename(Percent=Freq)%>%arrang
 
 ```
 
-```{r}
+```{r, BMI shit}
 #Distribution of BMI
 
 
