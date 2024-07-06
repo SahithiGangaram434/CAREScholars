@@ -135,15 +135,7 @@ corrplot(cordata_cor)
 
 ```
 
-```{r disease prevalence}
 
-
-data10k%>%
-  select(CHEARTDIEV, DIABETICEV, HEARTATTEV, HEARTCONEV, STROKEV, ALCSTAT1, SMOKESTATUS2, MOD10DMIN)%>% #Columns you want to make a frequency table for
-  lapply(table)
-
-
-```
 
 ```{r}
 library(janitor)
@@ -190,7 +182,59 @@ data.frame(prop.table(table(data10k$racea))*100)%>%rename(Percent=Freq)%>%arrang
 
 ```
 
+```{r}
+#Distribution of BMI
 
+
+# data10k%>%
+#   ggplot(aes(x=BMI))+
+#   geom_histogram(binwidth = 1)
+
+data%>%
+  select(BMI, BMICALC)%>%
+  filter(!BMICALC==996)%>%
+  filter(!BMI==0)%>%
+  filter(!BMI>98)%>%
+  filter(!BMI-BMICALC>1)%>%#Testing to see if they are all close in value
+  ggplot()+
+  geom_histogram(aes(x=BMI))#Distribution of BMI
+
+
+data%>%#Determining number of BMI values we have for each race
+  filter(!BMICALC==996)%>%
+  filter(!BMI==0)%>%
+  filter(!BMI>98)%>%
+  filter(!BMI-BMICALC>1)%>%
+  mutate(racea=as_factor(RACEA))%>%
+  filter(racea%in%c("White", "Chinese", "Filipino", "Asian Indian"))%>%
+  group_by(racea)%>%
+  summarize(
+    n(),
+    mean(BMI),
+    sd(BMI)
+  )
+```
+```{r, looking into creating composite}
+
+
+data%>%
+  select(CHEARTDIEV, CONGHARTEV, HEARTATTEV, HEARTCONEV, HYPERTENEV, STROKEV)%>% #Columns you want to make a frequency table for
+  lapply(as_factor)%>%
+  lapply(table)%>%
+  as.data.frame()
+
+data%>%
+  select(CHEARTDIEV, CONGHARTEV, HEARTATTEV, HEARTCONEV, HYPERTENEV, STROKEV)%>%#need to make a way to ignore missing/unknown
+  filter(across(c(CHEARTDIEV, CONGHARTEV, HEARTATTEV, HEARTCONEV, HYPERTENEV, STROKEV), ~ . %in% c(1, 2)))%>%#There are now observations with zero not in universe values
+  mutate(sum_disease=(CHEARTDIEV+CONGHARTEV+HEARTATTEV+HEARTCONEV+HYPERTENEV+STROKEV))#%>%
+  # filter(sum_disease>0)%>%
+  # ggplot(aes(x=sum_disease))+
+  # geom_boxplot()
+
+
+
+
+```
 
 Model Practice
 
