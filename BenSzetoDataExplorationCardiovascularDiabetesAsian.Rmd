@@ -84,16 +84,21 @@ data10k%>% #What does BMI do when BMI CALC is 996
 table(data10k$USBORN)
 
 ```
+```{r}
+# data%>%
+#   group_by(DIAB)
 
+
+```
 ```{r}
 
 
 #Distribution of BMICALC
-ggplotly(
+# plotly::ggplotly(
 data10k%>%
   ggplot(aes(x=BMICALC))+
   geom_histogram(binwidth = 1)
-)
+# )
 
 data10k%>% #checking normality of BMICALC removing 0 and 996
   filter(!BMICALC %in% c(0, 996))%>%
@@ -235,6 +240,35 @@ data%>%
 
 
 ```
+
+```{r, outcomes by year exploration}
+Value_Each_Year<-function(variable, dataset){#Creating function that can be used on all of the variables
+  dataset%>%
+    group_by(YEAR, {{variable}})%>%
+    summarise(
+      count=n()
+    )%>%
+    ungroup({{variable}})%>%
+    mutate(proportion=count/sum(count))%>%
+    ungroup()%>%
+    ggplot(aes(x=YEAR, y=proportion, fill=as_factor({{variable}})))+
+    geom_bar(, stat="identity", position="dodge")
+
+}
+
+Value_Each_Year(CHEARTDIEV, data)
+Value_Each_Year(CONGHARTEV, data)
+Value_Each_Year(HEARTATTEV, data)
+Value_Each_Year(HYPERTENEV, data)
+Value_Each_Year(STROKEV, data)
+
+
+#(CHEARTDIEV, CONGHARTEV, HEARTATTEV, HEARTCONEV, HYPERTENEV, STROKEV, YEAR, RACEA)%>%#Columns you want to make a frequency table for
+
+
+```
+
+
 
 Model Practice
 
