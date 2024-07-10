@@ -44,10 +44,16 @@ data10k%>% #Note this is from the random sample data so there may be things miss
   lapply(unique)
 ```
 
+```{r basic cleaning, go back to}
+data<-data%>%
+  mutate(racea=as_factor(RACEA))
+
+```
+
 ```{r} 
 
 #Counting number of levels for each variable
-data10k%>% #Note this is from the random sample data so there may be things missing from the population
+data%>% 
   sapply(function(x) length(unique(x)))
 
 ```
@@ -81,7 +87,7 @@ data10k%>% #What does BMI do when BMI CALC is 996
 ```
 
 ```{r}
-table(data10k$USBORN)
+table(as_factor(data10k$USBORN))
 
 ```
 ```{r}
@@ -242,7 +248,7 @@ data%>%
 ```
 
 ```{r, outcomes by year exploration}
-Value_Each_Year<-function(variable, dataset){#Creating function that can be used on all of the variables
+Value_Each_Year_fig<-function(variable, dataset){#Creating function that can be used on all of the variables to make figures
   dataset%>%
     group_by(YEAR, {{variable}})%>%
     summarise(
@@ -252,23 +258,90 @@ Value_Each_Year<-function(variable, dataset){#Creating function that can be used
     mutate(proportion=count/sum(count))%>%
     ungroup()%>%
     ggplot(aes(x=YEAR, y=proportion, fill=as_factor({{variable}})))+
-    geom_bar(, stat="identity", position="dodge")
+    geom_bar(stat="identity", position="dodge")
 
 }
 
+
+Value_Each_Year<-function(variable, dataset){#Creating function that can be used on all of the variables to make tables
+  dataset%>%
+    group_by(YEAR, {{variable}})%>%
+    summarise(
+      count=n()
+    )%>%
+    ungroup({{variable}})%>%
+    mutate(proportion=sprintf("%.4f%%", count/sum(count)*100))
+}
+
+#making the tables
 Value_Each_Year(CHEARTDIEV, data)
 Value_Each_Year(CONGHARTEV, data)
 Value_Each_Year(HEARTATTEV, data)
 Value_Each_Year(HYPERTENEV, data)
 Value_Each_Year(STROKEV, data)
 
+#making the figures
+Value_Each_Year_fig(CHEARTDIEV, data)
+Value_Each_Year_fig(CONGHARTEV, data)
+Value_Each_Year_fig(HEARTATTEV, data)
+Value_Each_Year_fig(HYPERTENEV, data)
+Value_Each_Year_fig(STROKEV, data)
 
-#(CHEARTDIEV, CONGHARTEV, HEARTATTEV, HEARTCONEV, HYPERTENEV, STROKEV, YEAR, RACEA)%>%#Columns you want to make a frequency table for
+
+
+```
+```{r, mortality data analysis}
+#creating reference for data set called mortality_data_ref
+mort_data_explore<-data%>%
+  select(MORTELIG, MORTUCODLD, MORTWT, MORTDIAB, MORTHYPR, MORTWTSA)%>%
+  lapply(as_factor)
+```
+
+```{r}
+
+data%>%
+  ggplot()+
+  geom_bar(aes(x=as_factor(MORTUCODLD)))+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+
+
+data%>%
+  mutate(racea=as_factor(RACEA))%>%
+  filter(racea%in%c("Filipino", "Chinese", "Asian Indian"))%>%
+  filter(!MORTUCODLD==96)%>%#filtering out NIU to make easier to read
+  ggplot(aes(x=as_factor(MORTUCODLD), fill=racea))+
+  geom_bar(position="dodge")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+
 
 
 ```
 
+```{r, mortality data}
+data%>%#Counting number of observations for each race for mortality data
+  filter(MORTELIG==1)%>%
+  filter(racea%in%c("White", "Chinese", "Asian Indian", "Filipino"))%>%
+  group_by(racea)%>%
+  count()
 
+data%>%#Counting number of observations for each race for mortality data DIABETICS ONLY
+  filter(MORTELIG==1)%>%
+  filter(racea%in%c("White", "Chinese", "Asian Indian", "Filipino"))%>%
+  filter(DIABETICEV%in%c(2,3))%>%#Filter if they have diabetes or borderline
+  group_by(racea)%>%
+  count()
+
+
+data%>%
+  select(MORTELIG, MORTUCODLD, MORTDIAB, MORTHYPR)%>%
+  lapply(unique)
+
+data<-data%>%
+  mutate(CVDM=ifelse(MORTUCODLD%in%c(1, 5),1,0))#New column called CVDM for individuals who die from Disease of Heart or Cardiovascular disease
+
+```
 
 Model Practice
 
@@ -276,6 +349,7 @@ Model Practice
 table(data$CHEARTDIEV)
 unique(data$CHEARTDIEV)
 ```
+
 ```{r}
 
 CHEARTDIEV_data<-data%>%
@@ -293,7 +367,7 @@ summary(CHEARTDIEV_glm)#base case is white with 0 BMI
 
 #Testing residuals
 
-CHEARTDIEV_aug<-augment(CHEARTDIEV_glm,CHEARTDIEV_data)%>%
+CHEARTDIEV_aug<-broom::augment(CHEARTDIEV_glm,CHEARTDIEV_data)%>%#augment function from the broom package NOT generics
   dplyr::mutate(.resp.resid=resid(CHEARTDIEV_glm, type="response"))
 
 arm::binnedplot(CHEARTDIEV_aug$BMI, CHEARTDIEV_aug$.resp.resid, col.int = NULL)#Clear trend need to apply transformation
@@ -305,3 +379,63 @@ CHEARTDIEV_bmi <- ggpredict(CHEARTDIEV_glm, terms = c("BMI", "racea"))
 plot(CHEARTDIEV_bmi)#Be sure to limit x axis domain
 
 ```
+
+
+```{r, Model 1:  Cardiovascular death only for diabetics}
+
+data_mod1<-data%>%
+  filter(racea%in%c("White", "Chinese", "Filipino", "Asian Indian"))%>%
+  filter(!MORTUCODLD==96)%>%#Removing NIU values
+  filter(DIABETICEV%in%c(2,3))%>%#Diabetic or borderline
+  filter(!BMI==0)%>%#Removing extraneous BMI values if present
+  filter(!BMI>98)
+
+mod1_glm<-glm(CVDM~BMI+racea+BMI:racea+SEX, data=data_mod1, family="binomial")
+
+
+summary(mod1_glm)
+
+
+mod1_aug<-broom::augment(mod1_glm,data_mod1)%>%#augment function from the broom package NOT generics
+  dplyr::mutate(.resp.resid=resid(mod1_glm, type="response"))
+
+arm::binnedplot(mod1_aug$BMI, mod1_aug$.resp.resid, col.int = NULL)#Clear trend need to apply transformation
+
+mod1_pred <- ggpredict(mod1_glm, terms = c("BMI", "racea"))
+
+plot(mod1_pred)#Be sure to limit x axis domain
+
+```
+
+```{r, looking into BMI and the development of diabetes for different groups}
+
+data_diab<-data%>%
+  filter(racea%in%c("White", "Chinese", "Filipino", "Asian Indian"))%>%
+  filter(!MORTUCODLD==96)%>%#Removing NIU values
+  filter(DIABETICEV%in%c(1,2,3))%>%
+  mutate(Diab_bord=ifelse(DIABETICEV%in%c(2,3),1,0))%>%#Diabetic or borderline
+  filter(!BMI==0)%>%#Removing extraneous BMI values if present
+  filter(!BMI>98)
+
+data_diab%>%
+  select(DIABETICEV, Diab_bord)
+
+diab_glm<-glm(Diab_bord~BMI+racea+BMI:racea+SEX, data=data_diab, family="binomial")
+
+
+summary(diab_glm)
+
+
+diab_aug<-broom::augment(diab_glm,data_diab)%>%#augment function from the broom package NOT generics
+  dplyr::mutate(.resp.resid=resid(diab_glm, type="response"))
+
+arm::binnedplot(diab_aug$BMI, diab_aug$.resp.resid, col.int = NULL)#Clear trend need to apply transformation
+
+diab_pred <- ggpredict(diab_glm, terms = c("BMI", "racea"))
+
+plot(diab_pred)#Be sure to limit x axis domain
+
+```
+
+
+
