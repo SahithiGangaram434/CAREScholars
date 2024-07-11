@@ -1,0 +1,969 @@
+---
+title: "Data Exploration Diabetes Cardiovascular Mortality"
+author: "Ben Szeto"
+date: "2024-06-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+#
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# NOTE: To load data, you must download both the extract's data and the DDI
+# and also set the working directory to the folder with these files (or change the path below).
+
+if (!require("ipumsr")) stop("Reading IPUMS data into R requires the ipumsr package. It can be installed using the following command: install.packages('ipumsr')")
+
+# Set working directory
+setwd("C:/Users/Owner/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code")
+
+ddi <- read_ipums_ddi("nhis_00027.xml")
+data <- read_ipums_micro(ddi)
+
+```
+
+
+```{r}
+library(tidyverse)
+library(knitr)
+library(plotly)
+library(ggeffects)
+library(ggformula)
+```
+
+```{r}
+set.seed(100)
+data10k<-data%>%sample_n(10000)#Taking 10,000 random rows from data
+
+```
+
+```{r}
+data10k%>% #Note this is from the random sample data so there may be things missing from the population
+  lapply(unique)
+```
+
+```{r} 
+
+#Counting number of levels for each variable
+data10k%>% #Note this is from the random sample data so there may be things missing from the population
+  sapply(function(x) length(unique(x)))
+
+```
+
+```{r}
+head(data10k)
+
+nrow(data10k)
+
+table(data10k$SEX)
+table(data10k$SEX)
+table(data10k$RACEA)
+
+nrow(data10k%>%filter(BMICALC==0))
+nrow(data10k%>%filter(BMI==0))
+
+
+
+data10k%>% #Checking distribution of BMI CALC; How many 0 and 996?
+  mutate(BMI_Terms=ifelse(!BMICALC %in% c(0,996), "Within Range", BMICALC))%>%
+  group_by(BMI_Terms)%>%
+  summarize(
+    n()
+  )
+
+data10k%>% #What does BMI do when BMI CALC is 996
+  filter(BMICALC==996)%>%
+  select(BMICALC, BMI,HEIGHT, WEIGHT)%>%
+  arrange(desc(BMI))
+
+```
+
+```{r}
+table(data10k$USBORN)
+
+```
+```{r}
+#Distribution of BMICALC
+# plotly::ggplotly(
+data10k%>%
+  ggplot(aes(x=BMICALC))+
+  geom_histogram(binwidth = 1)
+# )
+
+data10k%>% #checking normality of BMICALC removing 0 and 996
+  filter(!BMICALC %in% c(0, 996))%>%
+  ggplot(aes(sample=BMICALC))+
+  geom_qq()+
+  geom_qq_line()
+
+data10k%>% #checking normality of BMICALC removing 0 and 996
+  filter(!BMICALC %in% c(0, 996))%>%
+  ggplot(aes(x=BMICALC))+
+  geom_histogram()
+
+
+
+```
+```{r}
+library(corrplot)
+cordata<-data10k%>%
+  select(YEAR, AGE, SEX, MARSTCUR, RACEA, HISPYN, USBORN, EDUCREC2, EMPSTAT, POORYN, EARNINGS, OWNERSHIP, BMICALC, HEIGHT, WEIGHT, CHEARTDIEV, DIABETICEV, HEARTATTEV, HEARTCONEV, STROKEV, ALCSTAT1, SMOKESTATUS2, MOD10DMIN)
+cordata_cor<-cor(cordata)
+
+
+cordata_cor
+corrplot(cordata_cor)
+```
+
+
+
+
+
+```{r prevalences of diseases}
+
+# 
+#   pivot_longer(
+#     NHISHID,
+#     names_to="Variable",
+#     values_to="Level"
+#   )
+
+```
+
+
+
+```{r}
+library(janitor)
+
+
+```
+
+
+
+##Data Processing/Intial Univariate Analysis
+```{r}
+race_sub_data<-data%>%
+  mutate(racea=as_factor(RACEA))#%>%
+  #filter(racea%in%c("White", "Filipino", "Chinese", "Asian Indian", "Korean", "Vietnamese", "Japanese", "Pacific Islander"))
+
+data.frame(table(race_sub_data$racea))%>%#Freq table of different Asian Races. As you can see only Filipino, Chinese, Asian Indian. Remove above # to see more
+  arrange(desc(Freq))
+
+```
+
+```{r}
+
+data10k<-data10k%>%#New variable called sex based on SEX variable
+  mutate(sex=case_when(SEX==1~"male",
+                       SEX==2~"female",
+                       SEX%in%c(7,8,9)~"Unknown")#Single value for all reason unknown
+         )
+data10k%>%#bar plot for sex
+  ggplot(aes(x=sex))+
+  geom_bar()
+
+data10k$RACEA2<-as_factor(data10k$RACEA)
+
+data10k<-data10k%>%#new column that uses labels for race rather than code
+  mutate(racea=as_factor(RACEA))
+
+data10k%>% #Race bar plot
+   ggplot(aes(x=racea))+
+  geom_bar()
+
+
+data.frame(prop.table(table(data10k$racea))*100)%>%rename(Percent=Freq)%>%arrange(desc(Percent)) # GO BACK AND TRY TO DO W/ JANITOR PACKAGE WITH LAPPLY
+
+
+```
+
+```{r, BMI shit}
+#Distribution of BMI
+
+
+# data10k%>%
+#   ggplot(aes(x=BMI))+
+#   geom_histogram(binwidth = 1)
+
+data%>%
+  select(BMI, BMICALC)%>%
+  filter(!BMICALC==996)%>%
+  filter(!BMI==0)%>%
+  filter(!BMI>98)%>%
+  filter(!BMI-BMICALC>1)%>%#Testing to see if they are all close in value
+  ggplot()+
+  geom_histogram(aes(x=BMI))#Distribution of BMI
+
+
+data%>%#Determining number of BMI values we have for each race
+  filter(!BMICALC==996)%>%
+  filter(!BMI==0)%>%
+  filter(!BMI>98)%>%
+  filter(!BMI-BMICALC>1)%>%
+  mutate(racea=as_factor(RACEA))%>%
+  filter(racea%in%c("White", "Chinese", "Filipino", "Asian Indian"))%>%
+  group_by(racea)%>%
+  summarize(
+    n(),
+    mean(BMI),
+    sd(BMI)
+  )
+```
+```{r, looking into creating composite}
+
+
+data %>%
+  select(CHEARTDIEV, CONGHARTEV, HEARTATTEV, HEARTCONEV, HYPERTENEV, STROKEV) %>%
+  lapply(as_factor) %>%
+  lapply(table) %>%
+  as.data.frame()
+
+data %>%
+  select(CHEARTDIEV, CONGHARTEV, HEARTATTEV, HEARTCONEV, HYPERTENEV, STROKEV) %>%
+  filter(across(c(CHEARTDIEV, CONGHARTEV, HEARTATTEV, HEARTCONEV, HYPERTENEV, STROKEV), ~ . %in% c(1, 2))) %>%
+  mutate(sum_disease = (CHEARTDIEV + CONGHARTEV + HEARTATTEV + HEARTCONEV + HYPERTENEV + STROKEV)) %>%
+  ggplot(aes(x = sum_disease)) +
+  geom_boxplot()
+
+
+
+
+
+```
+
+```{r, outcomes by year exploration}
+Value_Each_Year<-function(variable, dataset){#Creating function that can be used on all of the variables
+  dataset%>%
+    group_by(YEAR, {{variable}})%>%
+    summarise(
+      count=n()
+    )%>%
+    ungroup({{variable}})%>%
+    mutate(proportion=count/sum(count))%>%
+    ungroup()%>%
+    ggplot(aes(x=YEAR, y=proportion, fill=as_factor({{variable}})))+
+    geom_bar(, stat="identity", position="dodge")
+
+}
+
+Value_Each_Year(CHEARTDIEV, data)
+Value_Each_Year(CONGHARTEV, data)
+Value_Each_Year(HEARTATTEV, data)
+Value_Each_Year(HYPERTENEV, data)
+Value_Each_Year(STROKEV, data)
+
+
+#(CHEARTDIEV, CONGHARTEV, HEARTATTEV, HEARTCONEV, HYPERTENEV, STROKEV, YEAR, RACEA)%>%#Columns you want to make a frequency table for
+
+
+```
+
+
+
+Model Practice
+
+```{r}
+table(data$CHEARTDIEV)
+unique(data$CHEARTDIEV)
+```
+```{r}
+table(data$MORTELIG)
+unique(data$MORTELIG)
+
+
+table(data$MORTUCODLD)
+unique(data$MORTUCODLD)
+
+
+table(data$MORTDIAB)
+unique(data$MORTDIAB)
+
+
+table(data$MORTWT)
+unique(data$MORTWT)
+
+table(data$MORTHYPR)
+unique(data$MORTHYPR)
+```
+
+```{r}
+
+CHEARTDIEV_data <- data %>%
+  filter(CHEARTDIEV %in% c(1, 2)) %>%
+  mutate(CHEARTDIEV_binary = case_when(CHEARTDIEV == 1 ~ 0,
+                                       CHEARTDIEV == 2 ~ 1)) %>%
+  mutate(racea = as_factor(RACEA)) %>%
+  filter(racea %in% c("White", "Filipino", "Chinese", "Asian Indian"))
+
+table(CHEARTDIEV_data$CHEARTDIEV_binary)
+
+CHEARTDIEV_glm <- glm(CHEARTDIEV_binary ~ BMI + racea + BMI:racea, data = CHEARTDIEV_data, family = "binomial")
+
+summary(CHEARTDIEV_glm) # base case is white with 0 BMI
+
+# Testing residuals
+CHEARTDIEV_aug <- augment(CHEARTDIEV_glm, CHEARTDIEV_data) %>%
+  mutate(.resp.resid = resid(CHEARTDIEV_glm, type = "response"))
+
+arm::binnedplot(CHEARTDIEV_aug$BMI, CHEARTDIEV_aug$.resp.resid, col.int = NULL) # Clear trend need to apply transformation
+
+CHEARTDIEV_bmi <- ggpredict(CHEARTDIEV_glm, terms = c("BMI", "racea"))
+
+plot(CHEARTDIEV_bmi) # Be sure to limit x axis domain
+
+
+
+```
+```{r}
+# Filtering and visualizing mortality data
+
+mortality_data <- data %>%
+  filter(MORTELIG == 1) %>% # Eligible for mortality dataset
+  select(MORTELIG, MORTUCODLD, MORTDIAB, MORTHYPR, MORTWTSA)
+
+# Table of mortality data
+knitr::kable(mortality_data %>% head(10), caption = "Sample Mortality Data")
+
+# Plot for MORTUCODLD (Leading cause of death)
+mortality_data %>%
+  ggplot(aes(x = as.factor(MORTUCODLD))) +
+  geom_bar() +
+  labs(title = "Distribution of Leading Underlying Cause of Death (ICD-10)", x = "ICD-10 Code", y = "Count")
+
+# Plot for MORTDIAB (Diabetes flag)
+mortality_data %>%
+  ggplot(aes(x = as.factor(MORTDIAB))) +
+  geom_bar() +
+  labs(title = "Diabetes Contributing Cause of Death", x = "Diabetes Flag", y = "Count")
+
+# Plot for MORTHYPR (Hypertension flag)
+mortality_data %>%
+  ggplot(aes(x = as.factor(MORTHYPR))) +
+  geom_bar() +
+  labs(title = "Hypertension Contributing Cause of Death", x = "Hypertension Flag", y = "Count")
+
+
+```
+```{r}
+# Create a lookup table for MORTUCODLD
+mortucodld_lookup <- data.frame(
+  value = c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 96),
+  label = c("Diseases of heart", "Malignant neoplasms", "Chronic lower respiratory diseases",
+            "Accidents (unintentional injuries)", "Cerebrovascular diseases", "Alzheimer's disease",
+            "Diabetes mellitus", "Influenza and pneumonia", "Nephritis, nephrotic syndrome and nephrosis",
+            "All other causes (residual)", "Not classifiable")
+)
+
+# Count the occurrences of each code in the MORTUCODLD column
+mortucodld_counts <- data %>%
+  count(MORTUCODLD) %>%
+  rename(value = MORTUCODLD)
+
+# Merge the lookup table with the counts
+mortucodld_summary <- mortucodld_lookup %>%
+  left_join(mortucodld_counts, by = "value") %>%
+  rename(`Code Label` = label, Count = n)
+
+# Display the table
+print(mortucodld_summary)
+
+# Filter the data for "Diseases of heart" (code 1 in MORTUCODLD)
+heart_diseases_data <- data %>%
+  filter(MORTUCODLD == 1)
+
+# Count the occurrences for each unique variable within the "Diseases of heart" category
+heart_diseases_counts <- heart_diseases_data %>%
+  summarise(
+    CONGHARTEV_count = sum(CONGHARTEV == 1, na.rm = TRUE),
+    CHEARTDIEV_count = sum(CHEARTDIEV == 1, na.rm = TRUE),
+    DIABETICEV_count = sum(DIABETICEV == 1, na.rm = TRUE),
+    HEARTATTEV_count = sum(HEARTATTEV == 1, na.rm = TRUE),
+    HEARTCONEV_count = sum(HEARTCONEV == 1, na.rm = TRUE),
+    HYPERTENEV_count = sum(HYPERTENEV == 1, na.rm = TRUE),
+    STROKEV_count = sum(STROKEV == 1, na.rm = TRUE)
+  )
+
+# Create a data frame for the counts with labels
+heart_diseases_counts_df <- data.frame(
+  `Code Label` = c("Ever told had congenital heart disease", 
+                   "Ever told had coronary heart disease", 
+                   "Ever told had diabetes", 
+                   "Ever told had heart attack", 
+                   "Ever told had heart condition/disease",
+                   "Ever told had hypertension",
+                   "Ever told had a stroke"),
+  Count = c(heart_diseases_counts$CONGHARTEV_count, 
+            heart_diseases_counts$CHEARTDIEV_count, 
+            heart_diseases_counts$DIABETICEV_count, 
+            heart_diseases_counts$HEARTATTEV_count, 
+            heart_diseases_counts$HEARTCONEV_count,
+            heart_diseases_counts$HYPERTENEV_count,
+            heart_diseases_counts$STROKEV_count)
+)
+
+# Display the data frame as a table
+print(heart_diseases_counts_df)
+
+```
+```{r}
+# Load necessary libraries
+library(dplyr)
+
+# Create a contingency table
+contingency_table <- table(data$CHEARTDIEV, data$DIABETICEV)
+
+# Perform Chi-square test
+chisq_test <- chisq.test(contingency_table)
+
+# Display results
+print(chisq_test)
+```
+
+
+```{r}
+# Load necessary libraries
+library(dplyr)
+
+# Collapsing rare categories into "Other"
+data$CHEARTDIEV_collapsed <- ifelse(data$CHEARTDIEV %in% c("0", "1", "2", "3"), data$CHEARTDIEV, "Other")
+data$DIABETICEV_collapsed <- ifelse(data$DIABETICEV %in% c("0", "1"), data$DIABETICEV, "Other")
+
+# Create a contingency table with collapsed categories
+contingency_table_collapsed <- table(data$CHEARTDIEV_collapsed, data$DIABETICEV_collapsed)
+
+# Perform Fisher's Exact Test with Monte Carlo simulation
+fisher_test <- fisher.test(contingency_table_collapsed, simulate.p.value = TRUE, B = 10000)
+
+# Display results
+print(fisher_test)
+
+```
+```{r}
+# Create a contingency table
+contingency_table <- table(data$CHEARTDIEV, data$DIABETICEV)
+
+# Perform Fisher's Exact Test with Monte Carlo simulation
+fisher_test <- fisher.test(contingency_table, simulate.p.value = TRUE, B = 10000)
+
+# Display results
+print(fisher_test)
+
+```
+
+
+```{r}
+# Load necessary libraries
+library(dplyr)
+
+# Collapsing rare categories into "Other"
+data$CHEARTDIEV_collapsed <- ifelse(data$CHEARTDIEV %in% c("0", "1", "2", "3"), data$CHEARTDIEV, "Other")
+data$DIABETICEV_collapsed <- ifelse(data$DIABETICEV %in% c("0", "1"), data$DIABETICEV, "Other")
+
+# Create a contingency table with collapsed categories
+contingency_table_collapsed <- table(data$CHEARTDIEV_collapsed, data$DIABETICEV_collapsed)
+
+# Perform Chi-squared test
+chisq_test_collapsed <- chisq.test(contingency_table_collapsed)
+
+# Display results
+print(chisq_test_collapsed)
+```
+
+
+```{r}
+# Load necessary libraries
+library(dplyr)
+library(ggplot2)
+
+# Filter out missing values and extreme BMI values
+data_clean <- data %>%
+  filter(!is.na(BMI), BMI > 0 & BMI < 60) %>%
+  filter(DIABETICEV %in% c(1, 2)) %>%
+  mutate(
+    DIAB_BINARY = ifelse(DIABETICEV == 1, 1, 0)
+  )
+
+# Summary statistics after cleaning
+summary_stats <- data_clean %>%
+  group_by(SUBGROUP) %>%
+  summarize(
+    Count = n(),
+    Mean_Age = mean(AGE, na.rm = TRUE),
+    Median_Age = median(AGE, na.rm = TRUE),
+    SD_Age = sd(AGE, na.rm = TRUE),
+    Mean_BMI = mean(BMI, na.rm = TRUE),
+    Median_BMI = median(BMI, na.rm = TRUE),
+    SD_BMI = sd(BMI, na.rm = TRUE),
+    Min_Age = min(AGE, na.rm = TRUE),
+    Max_Age = max(AGE, na.rm = TRUE),
+    Min_BMI = min(BMI, na.rm = TRUE),
+    Max_BMI = max(BMI, na.rm = TRUE)
+  )
+
+print(summary_stats)
+
+# Logistic regression model with BMI
+logistic_model <- glm(DIAB_BINARY ~ BMI + AGE + RACEA, data = data_clean, family = "binomial")
+
+# Summary of the logistic regression model
+summary(logistic_model)
+
+# Predicted probabilities
+data_clean$predicted_prob <- predict(logistic_model, type = "response")
+
+# Plot the predicted probabilities
+ggplot(data_clean, aes(x = BMI, y = predicted_prob, color = as.factor(RACEA))) +
+  geom_point() +
+  geom_smooth(method = "glm", method.args = list(family = "binomial"), se = FALSE) +
+  labs(title = "Predicted Probabilities of Diabetes by BMI",
+       x = "BMI", y = "Predicted Probability of Diabetes")
+
+# Create BMI categories
+data_clean <- data_clean %>%
+  mutate(BMI_CATEGORY = case_when(
+    BMI < 18.5 ~ "Underweight",
+    BMI >= 18.5 & BMI < 25 ~ "Normal weight",
+    BMI >= 25 & BMI < 30 ~ "Overweight",
+    BMI >= 30 ~ "Obese"
+  ))
+
+# Create a contingency table
+contingency_table <- table(data_clean$DIABETICEV, data_clean$BMI_CATEGORY)
+
+# Perform Chi-squared test
+chi_test <- chisq.test(contingency_table)
+
+# Display results
+chi_test
+
+# Logistic Regression Model Results
+summary(logistic_model)
+
+# Chi-Squared Test Results
+print(chi_test)
+
+# Interpretation
+if(chi_test$p.value < 0.05) {
+  cat("Chi-squared test: We reject the null hypothesis. There is an association between BMI categories and diabetes prevalence.\n")
+} else {
+  cat("Chi-squared test: We fail to reject the null hypothesis. There is no association between BMI categories and diabetes prevalence.\n")
+}
+
+
+```
+```{r}
+table(data$RACEA)
+unique(data$RACEA)
+
+table(data$DIAB_STATUS)
+unique(data$DIAB_STATUS)
+
+table(data$DIABETICEV)
+unique(data$DIABETICEV)
+
+table(data$MORTDIAB)
+unique(data$MORTDIAB)
+
+table(data$BMICALC)
+unique(data$BMICALC)
+
+table(data$BMI)
+unique(data$BMI)
+
+table(data$BMICAT)
+unique(data$BMICAT)
+```
+
+```{r}
+# Load necessary libraries
+library(dplyr)
+library(ggplot2)
+
+# Filter out missing values and extreme BMI values
+data_clean <- data %>%
+  filter(!is.na(BMI), BMI > 0 & BMI < 60) %>%
+  filter(DIABETICEV %in% c(1, 2)) %>%
+  mutate(
+    DIAB_BINARY = ifelse(DIABETICEV == 1, 1, 0)
+  )
+
+# Summarize continuous variables
+continuous_summary <- data_clean %>%
+  group_by(SUBGROUP) %>%
+  summarize(
+    Count = n(),
+    Mean_Age = mean(AGE, na.rm = TRUE),
+    Median_Age = median(AGE, na.rm = TRUE),
+    SD_Age = sd(AGE, na.rm = TRUE),
+    Mean_BMI = mean(BMI, na.rm = TRUE),
+    Median_BMI = median(BMI, na.rm = TRUE),
+    SD_BMI = sd(BMI, na.rm = TRUE),
+    Min_Age = min(AGE, na.rm = TRUE),
+    Max_Age = max(AGE, na.rm = TRUE),
+    Min_BMI = min(BMI, na.rm = TRUE),
+    Max_BMI = max(BMI, na.rm = TRUE)
+  )
+
+print(continuous_summary)
+
+# Summarize categorical variables
+categorical_summary <- data_clean %>%
+  group_by(SUBGROUP) %>%
+  summarize(
+    Male_Percentage = mean(SEX == 1, na.rm = TRUE) * 100,
+    Female_Percentage = mean(SEX == 2, na.rm = TRUE) * 100,
+    Married_Percentage = mean(MARSTCUR == 1, na.rm = TRUE) * 100,
+    Unmarried_Percentage = mean(MARSTCUR != 1, na.rm = TRUE) * 100,
+    US_Born_Percentage = mean(USBORN == 20, na.rm = TRUE) * 100,
+    Foreign_Born_Percentage = mean(USBORN != 20, na.rm = TRUE) * 100,
+    High_School_Percentage = mean(EDUCREC2 >= 3, na.rm = TRUE) * 100,
+    Employment_Percentage = mean(EMPSTAT == 111, na.rm = TRUE) * 100,
+    Poverty_Percentage = mean(POORYN == 1, na.rm = TRUE) * 100,
+    Home_Ownership_Percentage = mean(OWNERSHIP == 10, na.rm = TRUE) * 100,
+    Health_Insurance_Percentage = mean(HINOTCOVE == 1, na.rm = TRUE) * 100
+  )
+
+print(categorical_summary)
+
+```
+```{r}
+table(data$SEX)
+unique(data$SEX)
+
+
+table(data$MARSTCUR)
+unique(data$MARSTCUR)
+
+table(data$USBORN)
+unique(data$USBORN)
+
+table(data$EDUCREC2)
+unique(data$EDUCREC2)
+
+table(data$EMPSTAT)
+unique(data$EMPSTAT)
+
+table(data$POORYN)
+unique(data$POORYN)
+
+table(data$OWNERSHIP)
+unique(data$OWNERSHIP)
+
+table(data$HINOTCOVE)
+unique(data$HINOTCOVE)
+```
+
+```{r}
+# Load necessary libraries
+library(dplyr)
+
+# Clean and transform the data for percentage calculations
+data_clean <- data %>%
+  filter(!is.na(BMI), BMI > 0 & BMI < 60) %>%
+  filter(DIABETICEV %in% c(1, 2)) %>%
+  mutate(
+    DIAB_BINARY = ifelse(DIABETICEV == 1, 1, 0),
+    SEX = factor(SEX, levels = c(1, 2), labels = c("Male", "Female")),
+    MARSTCUR = factor(MARSTCUR, levels = c(1, 2, 3, 4, 5, 6, 7, 8), labels = c("Married", "Married, Spouse Absent", "Married, Spouse Unknown", "Separated", "Divorced", "Widowed", "Living with Partner", "Never Married")),
+    USBORN = factor(USBORN, levels = c(10, 11, 12, 20), labels = c("No", "No, born in US territory", "No, born outside US and territories", "Yes, born in US")),
+    EDUCREC2 = factor(EDUCREC2, levels = c(10, 20, 30, 31, 32, 40, 41, 42, 50), labels = c("Kindergarten only", "Grade 1-4", "Grade 5-8", "Grade 5-7", "Grade 8", "Grade 9-12", "Grade 9-11", "Grade 12", "1-4 years of college")),
+    EMPSTAT = factor(EMPSTAT, levels = c(100, 110, 111, 112, 120, 121, 122, 200, 210, 211, 212, 213, 214, 215, 216, 217, 220), labels = c("Employed", "Working", "Working for pay", "Working without pay", "With job, not at work", "With job, not at work: not looking", "With job, not at work: looking", "Not employed", "Unemployed", "Unemployed: On layoff", "Unemployed: On layoff and looking", "Unemployed: Unknown if looking or laid off", "Unemployed: Looking or on layoff", "Unemployed: Have job to return to", "Unemployed: Had job during round", "Unemployed: No job during reference period", "Not in labor force")),
+    POORYN = factor(POORYN, levels = c(1, 2), labels = c("At or above poverty threshold", "Below poverty threshold")),
+    OWNERSHIP = factor(OWNERSHIP, levels = c(10, 11, 12, 20, 30, 40), labels = c("Owned", "Owned", "Being bought", "Rented", "Other arrangement", "Rent free")),
+    HINOTCOVE = factor(HINOTCOVE, levels = c(1, 2), labels = c("No, has coverage", "Yes, has no coverage"))
+  )
+
+# Function to calculate percentages
+calculate_percentages <- function(data, var) {
+  data %>%
+    group_by(SUBGROUP) %>%
+    summarize(Percentage = mean(get(var) == levels(data[[var]])[2], na.rm = TRUE) * 100)
+}
+
+# Calculate percentages for each categorical variable
+sex_percentage <- calculate_percentages(data_clean, "SEX")
+marital_percentage <- calculate_percentages(data_clean, "MARSTCUR")
+usb_percentage <- calculate_percentages(data_clean, "USBORN")
+edu_percentage <- calculate_percentages(data_clean, "EDUCREC2")
+emp_percentage <- calculate_percentages(data_clean, "EMPSTAT")
+poverty_percentage <- calculate_percentages(data_clean, "POORYN")
+ownership_percentage <- calculate_percentages(data_clean, "OWNERSHIP")
+insurance_percentage <- calculate_percentages(data_clean, "HINOTCOVE")
+
+# Combine all percentages into a single table
+summary_table <- data_clean %>%
+  group_by(SUBGROUP) %>%
+  summarize(
+    Male_Percentage = mean(SEX == "Male", na.rm = TRUE) * 100,
+    Female_Percentage = mean(SEX == "Female", na.rm = TRUE) * 100,
+    Married_Percentage = mean(MARSTCUR == "Married", na.rm = TRUE) * 100,
+    Unmarried_Percentage = mean(MARSTCUR != "Married", na.rm = TRUE) * 100,
+    US_Born_Percentage = mean(USBORN == "Yes, born in US", na.rm = TRUE) * 100,
+    Foreign_Born_Percentage = mean(USBORN != "Yes, born in US", na.rm = TRUE) * 100,
+    High_School_Percentage = mean(EDUCREC2 >= "Grade 9-12", na.rm = TRUE) * 100,
+    Employment_Percentage = mean(EMPSTAT == "Employed", na.rm = TRUE) * 100,
+    Poverty_Percentage = mean(POORYN == "Below poverty threshold", na.rm = TRUE) * 100,
+    Home_Ownership_Percentage = mean(OWNERSHIP == "Owned", na.rm = TRUE) * 100,
+    Health_Insurance_Percentage = mean(HINOTCOVE == "No, has coverage", na.rm = TRUE) * 100
+  )
+
+print(summary_table)
+
+```
+
+```{r}
+# Load necessary libraries
+library(dplyr)
+
+# Clean and transform the data for percentage calculations
+data_clean <- data %>%
+  filter(!is.na(BMI), BMI > 0 & BMI < 60) %>%
+  filter(DIABETICEV %in% c(1, 2)) %>%
+  mutate(
+    DIAB_BINARY = ifelse(DIABETICEV == 1, 1, 0),
+    SEX = factor(SEX, levels = c(1, 2), labels = c("Male", "Female")),
+    MARSTCUR = factor(MARSTCUR, levels = c(1, 2, 3, 4, 5, 6, 7, 8), labels = c("Married", "Married, Spouse Absent", "Married, Spouse Unknown", "Separated", "Divorced", "Widowed", "Living with Partner", "Never Married")),
+    USBORN = factor(USBORN, levels = c(10, 11, 12, 20), labels = c("No", "No, born in US territory", "No, born outside US and territories", "Yes, born in US")),
+    EDUCREC2 = factor(EDUCREC2, levels = c(10, 20, 30, 31, 32, 40, 41, 42, 50), labels = c("Kindergarten only", "Grade 1-4", "Grade 5-8", "Grade 5-7", "Grade 8", "Grade 9-12", "Grade 9-11", "Grade 12", "1-4 years of college")),
+    EMPSTAT = factor(EMPSTAT, levels = c(100, 110, 111, 112, 120, 121, 122, 200, 210, 211, 212, 213, 214, 215, 216, 217, 220), labels = c("Employed", "Working", "Working for pay", "Working without pay", "With job, not at work", "With job, not at work: not looking", "With job, not at work: looking", "Not employed", "Unemployed", "Unemployed: On layoff", "Unemployed: On layoff and looking", "Unemployed: Unknown if looking or laid off", "Unemployed: Looking or on layoff", "Unemployed: Have job to return to", "Unemployed: Had job during round", "Unemployed: No job during reference period", "Not in labor force")),
+    POORYN = factor(POORYN, levels = c(1, 2), labels = c("At or above poverty threshold", "Below poverty threshold")),
+    OWNERSHIP = factor(OWNERSHIP, levels = c(10, 11, 12, 20, 30, 40), labels = c("Owned", "Owned", "Being bought", "Rented", "Other arrangement", "Rent free")),
+    HINOTCOVE = factor(HINOTCOVE, levels = c(1, 2), labels = c("No, has coverage", "Yes, has no coverage"))
+  )
+
+# Recalculate College Percentage
+summary_table_ses <- data_clean %>%
+  group_by(SUBGROUP) %>%
+  summarize(
+    # College_Percentage = mean(EDUCREC2 == "1-4 years of college", na.rm = TRUE) * 100, # College percentage
+    Employment_Percentage = mean(EMPSTAT %in% c("Employed", "Working", "Working for pay", "Working without pay", "With job, not at work", "With job, not at work: not looking", "With job, not at work: looking"), na.rm = TRUE) * 100 # Employment percentage
+  )
+
+print(summary_table_ses)
+
+
+```
+```{r}
+# Load necessary libraries
+library(dplyr)
+
+# Create a data frame for the race labels
+race_labels <- data.frame(
+  value = c(100, 200, 300, 310, 320, 330, 340, 350, 400, 410, 411, 412, 413, 414, 415, 416, 420, 421, 422, 423, 430, 431, 432, 433, 434, 500, 510, 520, 530, 540, 550, 560, 570, 580, 600, 610, 611, 612, 613, 614, 615, 616, 617, 900, 970, 980, 990),
+  label = c(
+    "White", "Black/African-American", "Aleut, Alaskan Native, or American Indian", "Alaskan Native or American Indian", "Alaskan Native/Eskimo", 
+    "Aleut", "American Indian", "American Indian or Alaskan Native and any other group", "Asian or Pacific Islander", "Asian", "Chinese", 
+    "Filipino", "Korean", "Vietnamese", "Japanese", "Asian Indian", "Pacific Islander", "Hawaiian", "Samoan", "Guamanian", 
+    "Other Asian or Pacific Islander", "Other Asian or Pacific Islander (1992-1995)", "Other Asian or Pacific Islander (1996)", 
+    "Other Asian or Pacific Islander (1997-1998)", "Other Asian (1999 forward)", "Other Race", "Other Race (1963-1977)", 
+    "Other Race (1978)", "Other Race (1979-1991)", "Other Race (1992-1995)", "Other Race (1996)", "Other Race (1997-1998)", 
+    "Other Race (1999-2002)", "Primary Race not releasable", "Multiple Race, No Primary Race Selected", 
+    "Multiple Race, including Asian, excluding Black and White", "Multiple Race, including Asian and Black, excluding White", 
+    "Multiple Race, including Asian and White, excluding Black", "Multiple Race, including Black, excluding Asian and White", 
+    "Multiple Race, including Black and White, excluding Asian", "Multiple Race, including White, excluding Asian and Black", 
+    "Multiple Race, including Asian, White, and Black", "Multiple Race, excluding Asian, White, and Black", "Unknown", 
+    "Unknown-refused", "Unknown-not ascertained", "Unknown (1997 forward: Don't know)"
+  )
+)
+
+# Clean and transform the data for educational attainment
+data_clean <- data %>%
+  filter(!is.na(EDUCREC2)) %>%
+  mutate(
+    RACEA = as.integer(RACEA),  # Ensure RACEA is an integer for merging
+    EDUCREC2 = factor(EDUCREC2, levels = c(10, 20, 30, 31, 32, 40, 41, 42, 50), 
+                      labels = c("Kindergarten only", "Grade 1-4", "Grade 5-8", "Grade 5-7", "Grade 8", "Grade 9-12", "Grade 9-11", "Grade 12", "1-4 years of college"))
+  )
+
+# Merge the data with race labels
+data_merged <- data_clean %>%
+  left_join(race_labels, by = c("RACEA" = "value"))
+
+# Summarize educational attainment by race
+edu_summary <- data_merged %>%
+  group_by(label, EDUCREC2) %>%
+  summarize(Count = n()) %>%
+  ungroup() %>%
+  arrange(label, EDUCREC2)
+
+print(edu_summary)
+
+
+
+```
+```{r}
+table(data$RACEA)
+unique(data$RACEA)
+
+table(data$AGE_GROUP)
+unique(data$AGE_GROUP)
+```
+```{r}
+# Load necessary libraries
+library(dplyr)
+
+# Create a data frame for the race labels
+race_labels <- data.frame(
+  value = c(100, 200, 300, 310, 320, 330, 340, 350, 400, 410, 411, 412, 413, 414, 415, 416, 420, 421, 422, 423, 430, 431, 432, 433, 434, 500, 510, 520, 530, 540, 550, 560, 570, 580, 600, 610, 611, 612, 613, 614, 615, 616, 617, 900, 970, 980, 990),
+  label = c(
+    "White", "Black/African-American", "Aleut, Alaskan Native, or American Indian", "Alaskan Native or American Indian", "Alaskan Native/Eskimo", 
+    "Aleut", "American Indian", "American Indian or Alaskan Native and any other group", "Asian or Pacific Islander", "Asian", "Chinese", 
+    "Filipino", "Korean", "Vietnamese", "Japanese", "Asian Indian", "Pacific Islander", "Hawaiian", "Samoan", "Guamanian", 
+    "Other Asian or Pacific Islander", "Other Asian or Pacific Islander (1992-1995)", "Other Asian or Pacific Islander (1996)", 
+    "Other Asian or Pacific Islander (1997-1998)", "Other Asian (1999 forward)", "Other Race", "Other Race (1963-1977)", 
+    "Other Race (1978)", "Other Race (1979-1991)", "Other Race (1992-1995)", "Other Race (1996)", "Other Race (1997-1998)", 
+    "Other Race (1999-2002)", "Primary Race not releasable", "Multiple Race, No Primary Race Selected", 
+    "Multiple Race, including Asian, excluding Black and White", "Multiple Race, including Asian and Black, excluding White", 
+    "Multiple Race, including Asian and White, excluding Black", "Multiple Race, including Black, excluding Asian and White", 
+    "Multiple Race, including Black and White, excluding Asian", "Multiple Race, including White, excluding Asian and Black", 
+    "Multiple Race, including Asian, White, and Black", "Multiple Race, excluding Asian, White, and Black", "Unknown", 
+    "Unknown-refused", "Unknown-not ascertained", "Unknown (1997 forward: Don't know)"
+  )
+)
+
+# Clean and transform the data for educational attainment
+data_clean <- data %>%
+  filter(!is.na(EDUCREC2)) %>%
+  mutate(
+    RACEA = as.integer(RACEA),  # Ensure RACEA is an integer for merging
+    EDUCREC2 = factor(EDUCREC2, levels = c(10, 20, 30, 31, 32, 40, 41, 42, 50), 
+                      labels = c("Kindergarten only", "Grade 1-4", "Grade 5-8", "Grade 5-7", "Grade 8", "Grade 9-12", "Grade 9-11", "Grade 12", "1-4 years of college"))
+  )
+
+# Merge the data with race labels
+data_merged <- data_clean %>%
+  left_join(race_labels, by = c("RACEA" = "value"))
+
+# Summarize educational attainment by race and calculate percentages
+edu_summary <- data_merged %>%
+  group_by(label, EDUCREC2) %>%
+  summarize(Count = n()) %>%
+  ungroup() %>%
+  group_by(label) %>%
+  mutate(Total = sum(Count)) %>%
+  ungroup() %>%
+  mutate(Percentage = (Count / Total) * 100) %>%
+  arrange(label, EDUCREC2)
+
+print(edu_summary)
+
+```
+
+
+
+```{r}
+# Load necessary libraries
+library(dplyr)
+library(epitools)  # For rate calculations and confidence intervals
+library(xml2)      # For reading XML files
+library(purrr)     # For map_df
+
+# Load your XML data
+xml_file_path <- "C:/Users/Owner/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00027.xml"
+xml_data <- read_xml(xml_file_path)
+
+# Extract relevant information from the XML data
+data <- xml_data %>%
+  xml_find_all("//record") %>%
+  map_df(~{
+    data.frame(
+      AGE = xml_text(xml_find_first(.x, "AGE_NODE")),       # Replace AGE_NODE with the actual node name for AGE
+      RACEA = xml_text(xml_find_first(.x, "RACEA_NODE")),   # Replace RACEA_NODE with the actual node name for RACEA
+      MORTUCODLD = xml_text(xml_find_first(.x, "MORTUCODLD_NODE")), # Replace MORTUCODLD_NODE with the actual node name for MORTUCODLD
+      stringsAsFactors = FALSE
+    )
+  }) %>%
+  mutate(
+    AGE = as.integer(AGE),
+    RACEA = as.integer(RACEA),
+    MORTUCODLD = as.integer(MORTUCODLD)
+  )
+
+# Verify the structure of the extracted data
+print(head(data))
+
+# Prepare your data
+data <- data %>%
+  filter(!is.na(AGE), !is.na(RACEA), !is.na(MORTUCODLD)) %>%
+  mutate(
+    AGE_GROUP = case_when(
+      AGE >= 0 & AGE <= 4 ~ "0-4",
+      AGE >= 5 & AGE <= 9 ~ "5-9",
+      AGE >= 10 & AGE <= 14 ~ "10-14",
+      AGE >= 15 & AGE <= 19 ~ "15-19",
+      AGE >= 20 & AGE <= 24 ~ "20-24",
+      AGE >= 25 & AGE <= 29 ~ "25-29",
+      AGE >= 30 & AGE <= 34 ~ "30-34",
+      AGE >= 35 & AGE <= 39 ~ "35-39",
+      AGE >= 40 & AGE <= 44 ~ "40-44",
+      AGE >= 45 & AGE <= 49 ~ "45-49",
+      AGE >= 50 & AGE <= 54 ~ "50-54",
+      AGE >= 55 & AGE <= 59 ~ "55-59",
+      AGE >= 60 & AGE <= 64 ~ "60-64",
+      AGE >= 65 & AGE <= 69 ~ "65-69",
+      AGE >= 70 & AGE <= 74 ~ "70-74",
+      AGE >= 75 & AGE <= 79 ~ "75-79",
+      AGE >= 80 & AGE <= 84 ~ "80-84",
+      AGE >= 85 ~ "85+",
+      TRUE ~ NA_character_
+    ),
+    DEATH = ifelse(!is.na(MORTUCODLD), 1, 0)
+  )
+
+# Standard population (example, typically provided by a standard like the WHO standard population)
+standard_population <- data.frame(
+  AGE_GROUP = c("0-4", "5-9", "10-14", "15-19", "20-24", "25-29", "30-34", "35-39", "40-44", "45-49", "50-54", "55-59", "60-64", "65-69", "70-74", "75-79", "80-84", "85+"),
+  STANDARD_POP = c(0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08, 0.08)
+)
+
+# Function to calculate ASMR and PMR
+calculate_asmr_pmr <- function(race_data, standard_population) {
+  merged_data <- merge(race_data, standard_population, by = "AGE_GROUP")
+  
+  # Calculate age-specific mortality rates
+  merged_data <- merged_data %>%
+    group_by(AGE_GROUP) %>%
+    summarize(
+      POPULATION = n(),
+      DEATHS = sum(DEATH)
+    ) %>%
+    mutate(AGE_SPECIFIC_RATE = (DEATHS / POPULATION) * 100000)
+  
+  # Calculate weighted age-specific mortality rates
+  merged_data <- merged_data %>%
+    mutate(WEIGHTED_RATE = AGE_SPECIFIC_RATE * (STANDARD_POP / sum(STANDARD_POP)))
+  
+  # Calculate ASMR
+  asmr <- sum(merged_data$WEIGHTED_RATE)
+  
+  # Calculate 95% confidence intervals for the ASMR
+  asmr_ci <- pois.exact(sum(merged_data$DEATHS), sum(merged_data$POPULATION), conf.level = 0.95)
+  
+  # Calculate Proportional Mortality Ratios (PMR)
+  total_deaths <- sum(merged_data$DEATHS)
+  merged_data <- merged_data %>%
+    mutate(PMR = (DEATHS / total_deaths) * 100)
+  
+  return(list(
+    asmr = asmr,
+    asmr_ci = asmr_ci,
+    pmr = merged_data %>% select(AGE_GROUP, PMR)
+  ))
+}
+
+# Calculate ASMR and PMR for each race
+results <- data %>%
+  group_by(RACEA) %>%
+  group_map(~ calculate_asmr_pmr(.x, standard_population))
+
+# Print results
+for (res in results) {
+  print(paste("ASMR per 100,000 population: ", res$asmr))
+  print(paste("95% CI: ", res$asmr_ci$lower, "-", res$asmr_ci$upper))
+  print(res$pmr)
+}
+
+```
+
