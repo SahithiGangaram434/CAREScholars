@@ -24,7 +24,6 @@ ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortalit
 data <- read_ipums_micro(ddi)
 ```
 
-
 ```{r}
 library(tidyverse)
 library(knitr)
@@ -50,7 +49,7 @@ data<-data%>%
 
 ```
 
-```{r} 
+```{r}
 
 #Counting number of levels for each variable
 data%>% 
@@ -90,12 +89,14 @@ data10k%>% #What does BMI do when BMI CALC is 996
 table(as_factor(data10k$USBORN))
 
 ```
+
 ```{r}
 # data%>%
 #   group_by(DIAB)
 
 
 ```
+
 ```{r}
 
 
@@ -120,6 +121,7 @@ data10k%>% #checking normality of BMICALC removing 0 and 996
 
 
 ```
+
 ```{r}
 library(corrplot)
 cordata<-data10k%>%
@@ -130,10 +132,6 @@ cordata_cor<-cor(cordata)
 cordata_cor
 corrplot(cordata_cor)
 ```
-
-
-
-
 
 ```{r prevalences of diseases}
 
@@ -146,17 +144,14 @@ corrplot(cordata_cor)
 
 ```
 
-
-
 ```{r}
 library(janitor)
 
 
 ```
 
-
-
 ##Data Processing/Intial Univariate Analysis
+
 ```{r}
 race_sub_data<-data%>%
   mutate(racea=as_factor(RACEA))#%>%
@@ -225,6 +220,7 @@ data%>%#Determining number of BMI values we have for each race
     sd(BMI)
   )
 ```
+
 ```{r, looking into creating composite}
 
 
@@ -290,6 +286,7 @@ Value_Each_Year_fig(STROKEV, data)
 
 
 ```
+
 ```{r, mortality data analysis}
 #creating reference for data set called mortality_data_ref
 mort_data_explore<-data%>%
@@ -380,7 +377,6 @@ plot(CHEARTDIEV_bmi)#Be sure to limit x axis domain
 
 ```
 
-
 ```{r, Model 1:  Cardiovascular death only for diabetics}
 
 data_mod1<-data%>%
@@ -388,9 +384,11 @@ data_mod1<-data%>%
   filter(!MORTUCODLD==96)%>%#Removing NIU values
   filter(DIABETICEV%in%c(2,3))%>%#Diabetic or borderline
   filter(!BMI==0)%>%#Removing extraneous BMI values if present
-  filter(!BMI>98)
+  filter(!BMI>98)%>%
+  mutate(sex=as_factor(SEX))%>%
+  filter(sex%in%c("Male", "Female"))
 
-mod1_glm<-glm(CVDM~BMI+racea+BMI:racea+SEX, data=data_mod1, family="binomial")
+mod1_glm<-glm(CVDM~BMI+racea+BMI:racea+sex, data=data_mod1, family="binomial")
 
 
 summary(mod1_glm)
@@ -399,12 +397,23 @@ summary(mod1_glm)
 mod1_aug<-broom::augment(mod1_glm,data_mod1)%>%#augment function from the broom package NOT generics
   dplyr::mutate(.resp.resid=resid(mod1_glm, type="response"))
 
-arm::binnedplot(mod1_aug$BMI, mod1_aug$.resp.resid, col.int = NULL)#Clear trend need to apply transformation
+arm::binnedplot(mod1_aug$BMI, mod1_aug$.resp.resid, col.int = NULL)
 
 mod1_pred <- ggpredict(mod1_glm, terms = c("BMI", "racea"))
 
 plot(mod1_pred)#Be sure to limit x axis domain
 
+library(datawizard)
+ggpredict(mod1_glm, terms = c("BMI", "racea"))
+
+#Do cox proportional hazard model
+#Poisson regression
+
+#Try to account for if they die of something else, code for that
+#competing risk analysis
+#either died from CVD, died from other, or alive
+#UCLA OARC- Resource for methods/code
+#https://www.nature.com/articles/1705727
 ```
 
 ```{r, looking into BMI and the development of diabetes for different groups}
@@ -415,12 +424,14 @@ data_diab<-data%>%
   filter(DIABETICEV%in%c(1,2,3))%>%
   mutate(Diab_bord=ifelse(DIABETICEV%in%c(2,3),1,0))%>%#Diabetic or borderline
   filter(!BMI==0)%>%#Removing extraneous BMI values if present
-  filter(!BMI>98)
+  filter(!BMI>98)%>%
+  mutate(sex=as_factor(SEX))%>%
+  filter(sex%in%c("Male", "Female"))
 
 data_diab%>%
   select(DIABETICEV, Diab_bord)
 
-diab_glm<-glm(Diab_bord~BMI+racea+BMI:racea+SEX, data=data_diab, family="binomial")
+diab_glm<-glm(Diab_bord~BMI+racea+BMI:racea+sex, data=data_diab, family="binomial")
 
 
 summary(diab_glm)
@@ -435,7 +446,46 @@ diab_pred <- ggpredict(diab_glm, terms = c("BMI", "racea"))
 
 plot(diab_pred)#Be sure to limit x axis domain
 
+
+library(datawizard)
+ggpredict(diab_glm, terms = c("BMI", "racea"))
+
 ```
 
+#Competing Risk Analysis <file:///C:/Users/bszet/Downloads/Competing%20Risk%20Guide%20Paper.pdf> \# <https://cran.r-project.org/web/packages/casebase/vignettes/plotabsRisk.html> \#<https://www.publichealth.columbia.edu/research/population-health-methods/competing-risk-analysis> \#<https://www.youtube.com/watch?v=d5TwGaJZGSQ>
+
+```{r}
+library(cmprsk)
+
+#data prepping:
+
+#Going to use age as failure time for practice. This is not correct real world. 
+
+data_cmprsk<-data%>%
+  filter(racea%in%c("White", "Chinese", "Filipino", "Asian Indian"))%>%
+  filter(!MORTUCODLD==96)%>%#Removing NIU values
+  filter(DIABETICEV%in%c(1,2,3))%>%
+  mutate(Diab_bord=ifelse(DIABETICEV%in%c(2,3),1,0))%>%#Diabetic or borderline
+  filter(!BMI==0)%>%#Removing extraneous BMI values if present
+  filter(!BMI>98)%>%
+  mutate(sex=as_factor(SEX))%>%
+  filter(sex%in%c("Male", "Female"))%>%
+  select(AGE, CVDM, BMI, racea, sex)#Selecting columns
+
+head(data_cmprsk)
+
+#cumulative incidence rate
+
+cuminc_test<-cuminc(ftime=data_cmprsk$AGE,fstatus=data_cmprsk$CVDM, group=data_cmprsk$racea)
+cuminc_test
+plot(cuminc_test)
+
+covariates_of_interest<-cbind(as_factor(data_cmprsk$BMI), as_factor(data_cmprsk$sex))
 
 
+fine_gray_fit<-crr(data_cmprsk$AGE,data_cmprsk$CVDM,covariates_of_interest)
+
+
+summary(fine_gray_fit)
+
+```
