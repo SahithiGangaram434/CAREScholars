@@ -1,0 +1,67 @@
+---
+title: "Practicing Competing Risk Analysis"
+author: "Ben Szeto"
+date: "2024-07-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(cmprsk)
+mydata<-read.csv("C:/Users/bszet/Downloads/demo_bmt.csv")
+
+
+```
+
+```{r}
+head(mydata)
+
+```
+
+
+```{r}
+mydata<-mydata%>%
+  mutate(disease=as_factor(case_when(dis==0~"ALL",
+                           dis==1~"AML")))%>%
+  mutate(status_f=as_factor(case_when(status==0~"survive",
+                           status==1~"TRM",
+                           status==2~"REL")))
+
+
+cuminc_output<-cuminc(mydata$ftime, mydata$status_f, mydata$disease, cencode = 0)
+cuminc_output
+plot(cuminc_output)
+
+
+
+```
+
+
+```{r}
+mydata2<-read_csv("C:/Users/bszet/Downloads/bmtcrr.csv")
+
+mydata2
+mydata2<-na.omit(mydata2)
+
+
+x<-cbind(as_factor(mydata2$Age), as_factor(mydata2$Phase), as_factor(mydata2$Source))
+
+mod1<-crr(mydata2$ftime, mydata2$Status, x)
+summary(mod1)
+```
+
+
+```{r}
+     attach(mydata2)
+     x <- cbind(Age,Sex,Phase, Source) # by default the first level is used as baseline
+  
+     
+     mod1 <- crr(ftime, Status, x)
+     
+     summary(mod1)
+
+```

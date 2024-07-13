@@ -489,3 +489,27 @@ fine_gray_fit<-crr(data_cmprsk$AGE,data_cmprsk$CVDM,covariates_of_interest)
 summary(fine_gray_fit)
 
 ```
+
+```{r}
+#Calculating mortality rates
+
+unique(data$MORTELIG)
+
+table(as_factor(data$MORTELIG))
+table(as_factor(data$MORTUCODLD))
+
+
+data%>%
+  filter(MORTUCODLD==96)%>%
+  group_by(as_factor(MORTELIG))%>%
+  count()
+
+
+
+```
+```{r}
+data%>%
+  filter(MORTELIG==1)
+
+
+```
