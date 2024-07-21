@@ -49,6 +49,60 @@ data<-data%>%
 
 ```
 
+Calculating Length Of Diabetes
+Age of Diagnosis-->Calculate date relative to survey year--> Use mortality date --> Length diagnosed with diabetes (exposure time)
+
+```{r, bmi category by race coded as BMI_R_Cat}
+
+#Asian BMI cutoffs:#via WHO
+
+#18.5–22.9 Normal
+
+#23–27.5 kg/m2 (overweight)
+
+#≥27.5 kg/m2 (obese)
+
+#White BMI Cutoffs
+
+# Underweight: Less than 18.5
+# Healthy weight: 18.5–24.9
+# Overweight: 25.0–29.9
+# Obese: 30.0 or higher 
+
+
+
+data%>%
+  select(racea, BMI)%>%
+  filter(racea%in%c("White", "Asian Indian", "Filipino", "Chinese"))%>%
+  mutate(BMI_R_Cat=ifelse(racea=="White", 
+                          case_when(BMI<18.5~"Underweight",#BMI thresholds for Whites
+                                    BMI>=18.5 & BMI<25~"Normal Weight",
+                                    BMI>=25 & BMI <30~"Overweight",
+                                    BMI>=30~"Obese"),
+                          case_when(BMI<18.5~"Underweight",#BMI thresholds for Asians (Considered all races not White)
+                                    BMI>=18.5 & BMI<23~"Normal Weight",
+                                    BMI>=23 & BMI <27.5~"Overweight",
+                                    BMI>=27.5~"Obese")))#27.5 is obese for Asians
+
+
+
+
+                                    
+```
+
+```{r, creating exposure time variable}
+
+data%>%
+  select(YEAR)%>%
+  mutate(DIABETICAGE=sample(1:30, n(), replace=TRUE))%>%#Practice Column (delete when actually get the dataset)
+  mutate(Death_Year=sample(2000:2019, n(), replace=TRUE))%>%#Practice Column (delete when actually get the dataset)
+  mutate(Year_Diabetes=YEAR-DIABETICAGE)%>%#calulating the year they were first diagnosed with diabetes
+  mutate(Diabetes_Exposure=Death_Year-Year_Diabetes)#Calculating years they had diabetes
+
+```
+
+
+
 ```{r}
 
 #Counting number of levels for each variable
@@ -237,7 +291,6 @@ data%>%
   # filter(sum_disease>0)%>%
   # ggplot(aes(x=sum_disease))+
   # geom_boxplot()
-
 
 
 
@@ -457,15 +510,15 @@ ggpredict(diab_glm, terms = c("BMI", "racea"))
 ```{r}
 library(cmprsk)
 
-#data prepping:
-
-#Going to use age as failure time for practice. This is not correct real world. 
+    #data prepping:
+    
+    #Going to use age as failure time for practice. This is not correct real world. 
 
 data_cmprsk<-data%>%
   filter(racea%in%c("White", "Chinese", "Filipino", "Asian Indian"))%>%
   filter(!MORTUCODLD==96)%>%#Removing NIU values
   filter(DIABETICEV%in%c(1,2,3))%>%
-  mutate(Diab_bord=ifelse(DIABETICEV%in%c(2,3),1,0))%>%#Diabetic or borderline
+  mutate(Diab_bord=ifelse(DIABETICEV%in%c(2),1,0))%>%#Diabetic
   filter(!BMI==0)%>%#Removing extraneous BMI values if present
   filter(!BMI>98)%>%
   mutate(sex=as_factor(SEX))%>%
@@ -474,13 +527,14 @@ data_cmprsk<-data%>%
 
 head(data_cmprsk)
 
+#Try treating BMI and Age as categorical variables: BMI standard thresholds (vary between White and Asians (27.5?)) + Age groups. 
 #cumulative incidence rate
 
 cuminc_test<-cuminc(ftime=data_cmprsk$AGE,fstatus=data_cmprsk$CVDM, group=data_cmprsk$racea)
 cuminc_test
 plot(cuminc_test)
 
-covariates_of_interest<-cbind(as_factor(data_cmprsk$BMI), as_factor(data_cmprsk$sex))
+covariates_of_interest<-cbind(data_cmprsk$BMI, as_factor(data_cmprsk$sex))
 
 
 fine_gray_fit<-crr(data_cmprsk$AGE,data_cmprsk$CVDM,covariates_of_interest)

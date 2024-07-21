@@ -48,7 +48,7 @@ mydata2
 mydata2<-na.omit(mydata2)
 
 
-x<-cbind(as_factor(mydata2$Age), as_factor(mydata2$Phase), as_factor(mydata2$Source))
+x<-cbind(mydata2$Age, as_factor(mydata2$Phase), as_factor(mydata2$Source))
 
 mod1<-crr(mydata2$ftime, mydata2$Status, x)
 summary(mod1)
