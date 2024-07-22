@@ -466,6 +466,10 @@ ggpredict(diab_glm, terms = c("BMI", "racea"))
 ```{r}
 library(cmprsk)
 
+#new variable from IPUMS - age at diagnosis of diabetes (subtract age of death from this variable) -> to have time indicator for competing risk analysis --> exposure time
+
+#while waiting for dataset from Dr. Bacong - see how to add the exposure time to this code
+
 #data prepping:
 
 #Going to use age as failure time for practice. This is not correct real world. 
@@ -541,39 +545,124 @@ data <- data %>%
 relevant_races <- c("Asian Indian", "Chinese", "Filipino")
 data_subset <- data %>% filter(racea %in% relevant_races)
 
-# Calculate descriptive statistics
-descriptive_stats <- data_subset %>%
+# Finding the N and percents for sex stratified by diabetes status and race
+sex_diabetes_table <- table(data_subset$SEX, data_subset$diabetes_status, data_subset$racea)
+sex_diabetes_table
+
+# Calculating the proportions and rounding for sex
+sex_diabetes_prop <- round(prop.table(sex_diabetes_table, margin = c(2, 3)) * 100, 1)
+sex_diabetes_prop
+
+# Age summary stratified by diabetes status and race
+age_summary <- data_subset %>%
   group_by(racea, diabetes_status) %>%
   summarise(
-    Sample_Size = n(),
-    Age_Mean = mean(AGE, na.rm = TRUE),
-    Age_SD = sd(AGE, na.rm = TRUE),
-    Female_Percent = mean(SEX == 2, na.rm = TRUE) * 100,
-    Ownership_House_Percent = mean(OWNERSHIP == 10, na.rm = TRUE) * 100,
-    Employment_Status_Percent = mean(EMPSTAT == 111, na.rm = TRUE) * 100,
-    Insurance_Coverage_Percent = mean(HINOTCOVE == 1, na.rm = TRUE) * 100,
-    Low_Income_Percent = mean(POORYN == 1, na.rm = TRUE) * 100,
-    High_School_Education_Percent = mean(EDUCREC2 >= 2, na.rm = TRUE) * 100
+    mean_age = mean(AGE, na.rm = TRUE),
+    sd_age = sd(AGE, na.rm = TRUE)
   )
+age_summary
 
-health_stats <- data_subset %>%
+# Finding the N and percents for ownership house variable stratified by diabetes status and race
+ownership_diabetes_table <- table(data_subset$OWNERSHIP, data_subset$diabetes_status, data_subset$racea)
+ownership_diabetes_table
+
+# Calculating the proportions and rounding for ownership house variable
+ownership_diabetes_prop <- round(prop.table(ownership_diabetes_table, margin = c(2, 3)) * 100, 1)
+ownership_diabetes_prop
+
+# Finding the N and percents for employment status stratified by diabetes status and race
+employment_diabetes_table <- table(data_subset$EMPSTAT, data_subset$diabetes_status, data_subset$racea)
+employment_diabetes_table
+
+# Calculating the proportions and rounding for employment status
+employment_diabetes_prop <- round(prop.table(employment_diabetes_table, margin = c(2, 3)) * 100, 1)
+employment_diabetes_prop
+
+# Finding the N and percents for insurance coverage stratified by diabetes status and race
+insurance_diabetes_table <- table(data_subset$HINOTCOVE, data_subset$diabetes_status, data_subset$racea)
+insurance_diabetes_table
+
+# Calculating the proportions and rounding for insurance coverage
+insurance_diabetes_prop <- round(prop.table(insurance_diabetes_table, margin = c(2, 3)) * 100, 1)
+insurance_diabetes_prop
+
+# Finding the N and percents for low income stratified by diabetes status and race
+income_diabetes_table <- table(data_subset$POORYN, data_subset$diabetes_status, data_subset$racea)
+income_diabetes_table
+
+# Calculating the proportions and rounding for low income
+income_diabetes_prop <- round(prop.table(income_diabetes_table, margin = c(2, 3)) * 100, 1)
+income_diabetes_prop
+
+# Finding the N and percents for high school education stratified by diabetes status and race
+education_diabetes_table <- table(data_subset$EDUCREC2 >= 2, data_subset$diabetes_status, data_subset$racea)
+education_diabetes_table
+
+# Calculating the proportions and rounding for high school education
+education_diabetes_prop <- round(prop.table(education_diabetes_table, margin = c(2, 3)) * 100, 1)
+education_diabetes_prop
+
+# BMI summary stratified by diabetes status and race
+bmi_summary <- data_subset %>%
   group_by(racea, diabetes_status) %>%
   summarise(
-    BMI_Mean = mean(BMI, na.rm = TRUE),
-    BMI_SD = sd(BMI, na.rm = TRUE),
-    Diabetes_Percent = mean(DIABETICEV == 1, na.rm = TRUE) * 100,
-    Hypertension_Percent = mean(HYPERTENEV == 1, na.rm = TRUE) * 100,
-    Stroke_Percent = mean(STROKEV == 1, na.rm = TRUE) * 100,
-    Heart_Attack_Percent = mean(HEARTATTEV == 1, na.rm = TRUE) * 100,
-    Physical_Activity_Percent = mean(MOD10DMIN > 0, na.rm = TRUE) * 100
+    mean_bmi = mean(BMI, na.rm = TRUE),
+    sd_bmi = sd(BMI, na.rm = TRUE)
   )
+bmi_summary
 
-combined_stats <- left_join(descriptive_stats, health_stats, by = c("racea", "diabetes_status"))
+# Finding the N and percents for hypertension stratified by diabetes status and race
+hypertension_diabetes_table <- table(data_subset$HYPERTENEV, data_subset$diabetes_status, data_subset$racea)
+hypertension_diabetes_table
 
-# Display the table
-combined_stats %>%
-  kable() %>%
-  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+# Calculating the proportions and rounding for hypertension
+hypertension_diabetes_prop <- round(prop.table(hypertension_diabetes_table, margin = c(2, 3)) * 100, 1)
+hypertension_diabetes_prop
+
+# Finding the N and percents for stroke stratified by diabetes status and race
+stroke_diabetes_table <- table(data_subset$STROKEV, data_subset$diabetes_status, data_subset$racea)
+stroke_diabetes_table
+
+# Calculating the proportions and rounding for stroke
+stroke_diabetes_prop <- round(prop.table(stroke_diabetes_table, margin = c(2, 3)) * 100, 1)
+stroke_diabetes_prop
+
+# Finding the N and percents for heart attack stratified by diabetes status and race
+heart_attack_diabetes_table <- table(data_subset$HEARTATTEV, data_subset$diabetes_status, data_subset$racea)
+heart_attack_diabetes_table
+
+# Calculating the proportions and rounding for heart attack
+heart_attack_diabetes_prop <- round(prop.table(heart_attack_diabetes_table, margin = c(2, 3)) * 100, 1)
+heart_attack_diabetes_prop
+
+# Finding the N and percents for physical activity stratified by diabetes status and race
+physical_activity_diabetes_table <- table(data_subset$MOD10DMIN > 0, data_subset$diabetes_status, data_subset$racea)
+physical_activity_diabetes_table
+
+# Calculating the proportions and rounding for physical activity
+physical_activity_diabetes_prop <- round(prop.table(physical_activity_diabetes_table, margin = c(2, 3)) * 100, 1)
+physical_activity_diabetes_prop
+
+# Combine all summaries into a single data frame
+combined_summary <- list(
+  Sex = sex_diabetes_prop,
+  Age = age_summary,
+  Ownership = ownership_diabetes_prop,
+  Employment = employment_diabetes_prop,
+  Insurance = insurance_diabetes_prop,
+  Income = income_diabetes_prop,
+  Education = education_diabetes_prop,
+  BMI = bmi_summary,
+  Hypertension = hypertension_diabetes_prop,
+  Stroke = stroke_diabetes_prop,
+  Heart_Attack = heart_attack_diabetes_prop,
+  Physical_Activity = physical_activity_diabetes_prop
+)
+
+# Print combined summaries
+combined_summary
+
+
 
 ```
 
