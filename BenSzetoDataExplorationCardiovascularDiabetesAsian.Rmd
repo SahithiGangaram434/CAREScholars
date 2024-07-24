@@ -11,25 +11,142 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r}
-# NOTE: To load data, you must download both the extract's data and the DDI
-# and also set the working directory to the folder with these files (or change the path below).
-
-if (!require("ipumsr")) stop("Reading IPUMS data into R requires the ipumsr package. It can be installed using the following command: install.packages('ipumsr')")
-
-ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00027.xml")
-
-#"C:\Users\bszet\OneDrive\Documents\Stanford Care Scholars\Diabetes Cardiovascular Outcomes\Data\nhis_00025.xml"
-
-#"C:\Users\bszet\OneDrive\Documents\Stanford Care Scholars\Diabetes Cardiovascular Outcomes\Data\nhis_00025.dat"
-data <- read_ipums_micro(ddi)
-```
-
-```{r}
 library(tidyverse)
 library(knitr)
 library(plotly)
 library(ggeffects)
 library(ggformula)
+```
+
+```{r}
+# NOTE: To load data, you must download both the extract's data and the DDI
+# and also set the working directory to the folder with these files (or change the path below).
+
+if (!require("ipumsr")) stop("Reading IPUMS data into R requires the ipumsr package. It can be installed using the following command: install.packages('ipumsr')")
+
+ddi <- read_ipums_ddi("/Users/benszeto/Library/CloudStorage/Box-Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00029.xml")
+#/Users/benszeto/Library/CloudStorage/Box-Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00029.xml
+#"C:\Users\bszet\OneDrive\Documents\Stanford Care Scholars\Diabetes Cardiovascular Outcomes\Data\nhis_00025.xml"
+
+#"C:\Users\bszet\OneDrive\Documents\Stanford Care Scholars\Diabetes Cardiovascular Outcomes\Data\nhis_00025.dat"
+data1 <- read_ipums_micro(ddi)
+
+ddi <- read_ipums_ddi("/Users/benszeto/Library/CloudStorage/Box-Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00027.xml")
+
+#"C:\Users\bszet\OneDrive\Documents\Stanford Care Scholars\Diabetes Cardiovascular Outcomes\Data\nhis_00025.dat"
+data2 <- read_ipums_micro(ddi)
+
+data1<-data1%>%
+  select(NHISHID, DIABETICAGE, DIAYRSAGO)
+
+data<-merge(data1, data2, by="NHISHID")
+
+data<-data%>%
+  filter(AGE>=18)
+```
+```{r}
+head(data)
+
+```
+
+```{r basic cleaning, go back to}
+data<-data%>%
+  mutate(racea=as_factor(RACEA))
+
+```
+```{r}
+data%>%
+  filter(DIABETICEV==2)%>%
+  ggplot()+
+  geom_bar(aes(x=DIAYRSAGO))
+
+
+data%>%
+  filter(DIABETICEV==2)%>%
+  count(DIAYRSAGO)
+```
+
+```{r, DIAYRSAGO, doesn't have values that arent avaliable in DIABETICAGE}
+data%>%
+  select(DIABETICAGE, DIAYRSAGO)%>%
+  filter(DIABETICAGE==96)%>%
+  na.omit(DIAYRSAGO)%>%
+  filter(!DIAYRSAGO==96)
+```
+
+```{r, counting number of individuals eligible for exposure time for competing risk analysis}
+
+data%>%
+  filter(DIABETICEV==2)%>%
+  filter(racea%in%c("Chinese", "Asian Indian", "White", "Filipino"))%>%
+  filter(DIABETICAGE<85)%>%
+  filter(MORTELIG==1)%>%
+  filter(!BMI==0)%>%
+  filter(BMI<90)%>%
+  group_by(racea)%>%
+  count()
+
+
+data%>%
+  filter(DIABETICEV==2)%>%
+  filter(racea%in%c("Chinese", "Asian Indian", "White", "Filipino"))%>%
+  filter(DIABETICAGE<85)%>%
+  filter(!BMI==0)%>%
+  filter(BMI<90)%>%
+  group_by(racea)%>%
+  count()
+
+
+data%>%
+  filter(DIABETICEV==2)%>%
+  filter(racea%in%c("Chinese"))%>%
+  filter(DIABETICAGE<85)%>%
+  filter(!BMI==0)%>%
+   filter(!MORTELIG==1)%>%
+  filter(BMI<90)%>%
+  group_by(racea)
+
+
+data%>%
+  filter(DIABETICEV==2)%>%
+  filter(racea%in%c("Chinese", "Asian Indian", "White", "Filipino"))%>%
+  filter(DIABETICAGE<85)%>%
+  filter(!BMI==0)%>%
+   filter(MORTELIG==1)%>%
+  filter(!MORTUCODLD==96)%>%
+  filter(BMI<90)%>%
+  group_by(racea)%>%
+  count()
+
+data%>%
+  filter(DIABETICEV==2)%>%
+  filter(racea%in%c("Chinese", "Asian Indian", "White", "Filipino"))%>%
+  filter(MORTELIG==1)%>%
+  group_by(racea)%>%
+  count()
+
+#Linear Interpolation
+  
+```
+```{r}
+data%>%
+  filter(DIABETICEV==2)%>%
+  filter(AGE>=18)%>%
+  filter(racea%in%c("Chinese", "White"))%>%
+  filter(DIABETICAGE<85)%>%
+  filter(!BMI==0)%>%
+   filter(MORTELIG==1)%>%
+  mutate(NIU_Und=ifelse(MORTUCODLD==96, "Not in universe", "In Universe"))%>%
+  filter(BMI<90)%>%
+  group_by(NIU_Und, racea)%>%
+  summarize(
+    mean(AGE),
+    n(),
+    mean(DIABETICAGE)
+  )
+
+
+
 ```
 
 ```{r}
@@ -43,11 +160,7 @@ data10k%>% #Note this is from the random sample data so there may be things miss
   lapply(unique)
 ```
 
-```{r basic cleaning, go back to}
-data<-data%>%
-  mutate(racea=as_factor(RACEA))
 
-```
 
 Calculating Length Of Diabetes
 Age of Diagnosis-->Calculate date relative to survey year--> Use mortality date --> Length diagnosed with diabetes (exposure time)
@@ -337,7 +450,8 @@ Value_Each_Year_fig(HYPERTENEV, data)
 Value_Each_Year_fig(STROKEV, data)
 
 
-
+Value_Each_Year(EMPSTAT, data)
+Value_Each_Year_fig(EMPSTAT, data)
 ```
 
 ```{r, mortality data analysis}
@@ -566,4 +680,4 @@ data%>%
   filter(MORTELIG==1)
 
 
-```
+	⁃	```

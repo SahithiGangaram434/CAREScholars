@@ -1,0 +1,112 @@
+---
+title: "Summarization Function"
+author: "Ben Szeto"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(knitr)
+library(plotly)
+library(ggeffects)
+library(ggformula)
+```
+
+```{r}
+# NOTE: To load data, you must download both the extract's data and the DDI
+# and also set the working directory to the folder with these files (or change the path below).
+
+if (!require("ipumsr")) stop("Reading IPUMS data into R requires the ipumsr package. It can be installed using the following command: install.packages('ipumsr')")
+
+ddi <- read_ipums_ddi("/Users/benszeto/Library/CloudStorage/Box-Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00029.xml")
+#/Users/benszeto/Library/CloudStorage/Box-Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00029.xml
+#"C:\Users\bszet\OneDrive\Documents\Stanford Care Scholars\Diabetes Cardiovascular Outcomes\Data\nhis_00025.xml"
+
+#"C:\Users\bszet\OneDrive\Documents\Stanford Care Scholars\Diabetes Cardiovascular Outcomes\Data\nhis_00025.dat"
+data1 <- read_ipums_micro(ddi)
+
+ddi <- read_ipums_ddi("/Users/benszeto/Library/CloudStorage/Box-Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00027.xml")
+
+#"C:\Users\bszet\OneDrive\Documents\Stanford Care Scholars\Diabetes Cardiovascular Outcomes\Data\nhis_00025.dat"
+data2 <- read_ipums_micro(ddi)
+
+data1<-data1%>%
+  select(NHISHID, DIABETICAGE, DIAYRSAGO)
+
+data<-merge(data1, data2, by="NHISHID")
+
+data<-data%>%
+  filter(AGE>=18)
+```
+
+
+```{r}
+data<-data%>%
+  mutate(racea=as_factor(RACEA))%>%
+  filter(BMI>0)%>%
+  filter(BMI<90)
+
+
+data<-data%>%
+  filter(racea%in%c("White", "Asian Indian", "Filipino", "Chinese"))%>%
+  mutate(BMI_R_Cat=ifelse(racea=="White", 
+                          case_when(BMI<18.5~"Underweight",#BMI thresholds for Whites
+                                    BMI>=18.5 & BMI<25~"Normal Weight",
+                                    BMI>=25 & BMI <30~"Overweight",
+                                    BMI>=30~"Obese"),
+                          case_when(BMI<18.5~"Underweight",#BMI thresholds for Asians (Considered all races not White)
+                                    BMI>=18.5 & BMI<23~"Normal Weight",
+                                    BMI>=23 & BMI <27.5~"Overweight",
+                                    BMI>=27.5~"Obese")))#27.5 is obese for Asians
+
+
+
+
+
+```
+
+```{r}
+data%>%
+  group_by(racea)%>%
+  summarize(
+    mean=mean(BMI),
+    sd=sd(BMI),
+    observations=n()
+  )%>%
+  mutate(t_val=qt(0.975, observations))%>%
+  mutate(lower_bound=mean-t_val*sd)%>%
+  mutate(upper_bound=mean+t_val*sd)%>%
+  mutate(point_int=paste(round(mean, 2), ", (",round(lower_bound, 2),"-", round(upper_bound,2),")", sep=""))%>%
+   select(racea, point_int)%>%
+    rename(paste("BMI", "Estimate_CI")=point_int)
+
+
+
+```
+```{r}
+table_1_function_quant<-function(dataset, variable){
+  
+  variable_string_name <- deparse(substitute(variable))
+  column_name<- paste0(variable_string_name, "_point_int")
+  
+  dataset%>%
+  group_by(racea)%>%
+  summarize(
+    mean=mean({{variable}}),
+    sd=sd({{variable}}),
+    observations=n()
+  )%>%
+  mutate(t_val=qt(0.975, observations))%>%
+  mutate(lower_bound=mean-t_val*sd)%>%
+  mutate(upper_bound=mean+t_val*sd)%>%
+  mutate(!!column_name :=  paste0(round(mean, 2), ", (", round(lower_bound, 2), "-", round(upper_bound, 2), ")")) %>%
+    select(racea,!!column_name)
+}
+
+table_1_function_quant(data, BMI)
+```
