@@ -71,28 +71,10 @@ data<-data%>%
 ```
 
 ```{r}
-data%>%
-  group_by(racea)%>%
-  summarize(
-    mean=mean(BMI),
-    sd=sd(BMI),
-    observations=n()
-  )%>%
-  mutate(t_val=qt(0.975, observations))%>%
-  mutate(lower_bound=mean-t_val*sd)%>%
-  mutate(upper_bound=mean+t_val*sd)%>%
-  mutate(point_int=paste(round(mean, 2), ", (",round(lower_bound, 2),"-", round(upper_bound,2),")", sep=""))%>%
-   select(racea, point_int)%>%
-    rename(paste("BMI", "Estimate_CI")=point_int)
-
-
-
-```
-```{r}
 table_1_function_quant<-function(dataset, variable){
   
   variable_string_name <- deparse(substitute(variable))
-  column_name<- paste0(variable_string_name, "_point_int")
+  column_name<- paste(variable_string_name, "_point_int")
   
   dataset%>%
   group_by(racea)%>%
@@ -106,7 +88,9 @@ table_1_function_quant<-function(dataset, variable){
   mutate(upper_bound=mean+t_val*sd)%>%
   mutate(!!column_name :=  paste0(round(mean, 2), ", (", round(lower_bound, 2), "-", round(upper_bound, 2), ")")) %>%
     select(racea,!!column_name)
+  #Maybe try to rotate
 }
 
 table_1_function_quant(data, BMI)
+
 ```
