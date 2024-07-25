@@ -184,8 +184,7 @@ Age of Diagnosis-->Calculate date relative to survey year--> Use mortality date 
 
 
 
-data%>%
-  select(racea, BMI)%>%
+data<-data%>%
   filter(racea%in%c("White", "Asian Indian", "Filipino", "Chinese"))%>%
   mutate(BMI_R_Cat=ifelse(racea=="White", 
                           case_when(BMI<18.5~"Underweight",#BMI thresholds for Whites
@@ -209,8 +208,8 @@ data%>%
   select(YEAR)%>%
   mutate(DIABETICAGE=sample(1:30, n(), replace=TRUE))%>%#Practice Column (delete when actually get the dataset)
   mutate(Death_Year=sample(2000:2019, n(), replace=TRUE))%>%#Practice Column (delete when actually get the dataset)
-  mutate(Year_Diabetes=YEAR-DIABETICAGE)%>%#calulating the year they were first diagnosed with diabetes
-  mutate(Diabetes_Exposure=Death_Year-Year_Diabetes)#Calculating years they had diabetes
+  mutate(Years_Diabetes_pre=AGE-DIABETICAGE)%>%#calulating the year they were first diagnosed with diabetes
+  mutate(Diabetes_Exposure=Death_Year-YEAR+Year_Diabetes_pre)#Calculating years they had diabetes
 
 ```
 
@@ -637,24 +636,26 @@ data_cmprsk<-data%>%
   filter(!BMI>98)%>%
   mutate(sex=as_factor(SEX))%>%
   filter(sex%in%c("Male", "Female"))%>%
-  select(AGE, CVDM, BMI, racea, sex)#Selecting columns
+  select(AGE, CVDM, BMI, racea, sex, BMI_R_Cat)#Selecting columns
 
-head(data_cmprsk)
+data_cmprsk
 
-#Try treating BMI and Age as categorical variables: BMI standard thresholds (vary between White and Asians (27.5?)) + Age groups. 
-#cumulative incidence rate
-
-cuminc_test<-cuminc(ftime=data_cmprsk$AGE,fstatus=data_cmprsk$CVDM, group=data_cmprsk$racea)
-cuminc_test
-plot(cuminc_test)
-
-covariates_of_interest<-cbind(data_cmprsk$BMI, as_factor(data_cmprsk$sex))
-
-
+# head(data_cmprsk)
+# 
+# #Try treating BMI and Age as categorical variables: BMI standard thresholds (vary between White and Asians (27.5?)) + Age groups.
+# #cumulative incidence rate
+# 
+ cuminc_test<-cuminc(ftime=data_cmprsk$AGE,fstatus=data_cmprsk$CVDM, group=data_cmprsk$racea)
+ cuminc_test
+ plot(cuminc_test)
+# 
+covariates_of_interest<-cbind(as_factor(data_cmprsk$BMI_R_Cat), as_factor(data_cmprsk$sex))
+# 
+# 
 fine_gray_fit<-crr(data_cmprsk$AGE,data_cmprsk$CVDM,covariates_of_interest)
-
-
-summary(fine_gray_fit)
+# 
+# 
+# summary(fine_gray_fit)
 
 ```
 
