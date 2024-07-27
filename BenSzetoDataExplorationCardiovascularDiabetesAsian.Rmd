@@ -126,7 +126,33 @@ data%>%
   count()
 
 #Linear Interpolation
-  
+
+#Make sure diabetes related death (MORTDIAB),
+#use the whole cohort
+#Use diabetes as a covariate at the end
+#Diabetes related death--> Make an additional diabetes variable (Differences in diabetes status at survey vs at death)
+
+#Competing risk analysis
+#Death from diabetes related cardiovascular death
+#Key x is just race
+#Mortality rate: deaths per person years
+#Generate hazard ratios relative to NHW
+
+#3 possible routes
+# Among diabetics, how many die from cvd (look into people w and w/o diabetes)
+#Among races, how many die from diabetes related cvd
+# Among people with diabetes, how long you have diabetes, how does that impact cvd mort. (likely issue w sample size)
+
+data%>%
+  filter(racea%in%c("Chinese", "Asian Indian", "White", "Filipino"))%>%
+  filter(MORTELIG==1)%>%
+  filter(!MORTUCODLD==96)%>%
+  filter(MORTUCODLD%in%c(2,5))%>%
+  filter(MORTDIAB==2)%>%
+  filter(BMI<90)%>%
+  filter(!BMI==0)%>%
+  group_by(racea)%>%
+  count()
 ```
 ```{r}
 data%>%
