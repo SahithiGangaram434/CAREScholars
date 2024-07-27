@@ -139,7 +139,7 @@ data%>%
 #Generate hazard ratios relative to NHW
 
 #3 possible routes
-# Among diabetics, how many die from cvd (look into people w and w/o diabetes)
+# Among diabetics, how many die from cvd (look into people w and w/o diabetes) $just look at diabetes, not whether diabetes related. 
 #Among races, how many die from diabetes related cvd
 # Among people with diabetes, how long you have diabetes, how does that impact cvd mort. (likely issue w sample size)
 
