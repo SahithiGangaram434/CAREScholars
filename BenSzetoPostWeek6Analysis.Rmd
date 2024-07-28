@@ -16,6 +16,7 @@ library(plotly)
 library(ggeffects)
 library(ggformula)
 library(ipumsr)
+library(cmprsk)
 ```
 
 
@@ -44,21 +45,49 @@ data3<-data3%>%#Selecting variables of interest from data3
   select(NHISPID, MORTDODY, MORTWT, MORTSTAT)
 
 data<-merge(data1, data2, by="NHISPID")
+data
 data<-merge(data, data3, by="NHISPID")
 
 ```
-
-
 ```{r}
 data%>%
+  filter(!MORTDODY==9999)%>%
+  select(MORTDODY)%>%
+  arrange(desc(MORTDODY))
+
+```
+
+```{r, defining exposure time since DOB}
+data<-data%>%
+  mutate(exposure_birth=ifelse(
+    MORTSTAT==1,
+    MORTDODY-YEAR+AGE,#If dead, time ends at year of death
+    2019-YEAR+AGE#If alive or NIU, time ends at 2019
+    ))
+
+```
+
+```{r, defining exposure time since Diabetes Diagnosis}
+
+data<-data%>%
+  mutate(exposure_diabetes=ifelse(
+    !DIABETICAGE==96 & !MORTDODY==9999,
+    (AGE-DIABETICAGE)+(MORTDODY-YEAR),
+    NA
+  ))
+
+```
+
+```{r, data cleaning}
+data<-data%>%
   mutate(racea=as_factor(RACEA))%>%
   mutate(mortstat=as_factor(MORTSTAT))%>%
   mutate(morthypr=MORTHYPR)%>%
-  filter(racea%in%c("Chinese", "Asian Indian", "White", "Filipino"))%>%
-  filter(!BMI==0)%>%
+  filter(racea%in%c("Chinese", "Asian Indian", "White", "Filipino"))%>% #selecting Chinese, Asian Indian, Filipino, and White
+  filter(!BMI==0)%>% #filtering out extranious BMIs
   filter(BMI<90)%>%
   filter(MORTELIG==1)%>%
-   mutate(BMI_R_Cat=ifelse(racea=="White", 
+  mutate(BMI_R_Cat=ifelse(racea=="White", 
                           case_when(BMI<18.5~"Underweight",#BMI thresholds for Whites
                                     BMI>=18.5 & BMI<25~"Normal Weight",
                                     BMI>=25 & BMI <30~"Overweight",
@@ -66,14 +95,93 @@ data%>%
                           case_when(BMI<18.5~"Underweight",#BMI thresholds for Asians (Considered all races not White)
                                     BMI>=18.5 & BMI<23~"Normal Weight",
                                     BMI>=23 & BMI <27.5~"Overweight",
-                                    BMI>=27.5~"Obese")))#27.5 is obese for Asians
+                                    BMI>=27.5~"Obese")))%>%#27.5 is obese for Asians
+mutate(CVD_MOR=ifelse(MORTUCODLD%in%c(1, 5), TRUE, FALSE))
+```
+#3 possible routes
+# Among diabetics, how many die from cvd (look into people w and w/o diabetes) $just look at diabetes, not whether diabetes related. 
+#Among races, how many die from diabetes related cvd
+# Among people with diabetes, how long you have diabetes, how does that impact cvd mort. (likely issue w sample size)
+
+
+Model 1: Among diabetics, how many die from cvd (look into people w and w/o diabetes) $just look at diabetes, not whether diabetes related
+```{r}
+data_mod1<-data%>%
+  mutate(Diabetes_Lifetime=case_when(
+    DIABETICEV==2|MORTDIAB==2~"Diabetic",
+    DIABETICEV%in%c(0,7,8,9) & MORTDIAB==9~"Unknown/Not in Universe",
+    TRUE~"Non-Diabetic"
+  ))%>%
+  mutate(CVDMORT_Diabetes=ifelse(CVD_MOR==TRUE&Diabetes_Lifetime=="Diabetic", TRUE, FALSE))%>%#Whether individual has diabetes and dies from Heart Attack or Stroke
+  filter(MORTELIG==1)
 
 ```
 
 ```{r}
-
-
+data_mod1%>%
+  group_by(CVDMORT_Diabetes, racea)%>%
+  summarize(
+    n(),
+    mean(exposure_birth)
+  )%>%
+  arrange(desc(racea))
 
 ```
 
-Model 1: 
+```{r, competing risk analysis model 1, exposure time since birth, endpoint is CVD death with diabetes}
+
+ cuminc_test<-cuminc(ftime=data_mod1$exposure_birth,fstatus=data_mod1$CVDMORT_Diabetes, group=data_mod1$racea)
+ cuminc_test
+ plot(cuminc_test, col = c("black", "blue", "green", "red"), lty=1, ylim=c(0,0.5))
+
+```
+
+
+
+
+Model 2: Among races, how many die from diabetes related cvd
+
+
+```{r}
+
+unique(data$MORTDIAB)
+unique(data$MORTUCODLD)
+
+data_mod2<-data%>%
+  mutate(Diabetes_CVD=ifelse(
+    MORTDIAB==2 & MORTUCODLD %in%c(1,5),
+    TRUE,
+    FALSE
+  ))
+
+data_mod2%>%
+  group_by(Diabetes_CVD, racea)%>%
+  summarize(
+    n(),
+    mean(exposure_birth)
+    )%>%
+  arrange(desc(racea))
+  
+
+```
+
+```{r competing risk analysis exposure time since birth, }
+ cuminc_test<-cuminc(ftime=data_mod2$exposure_birth,fstatus=data_mod2$Diabetes_CVD, group=data_mod2$racea)
+ cuminc_test
+ plot(cuminc_test, col = c("black", "blue", "green", "red"), lty=1, ylim=c(0,0.2))
+
+```
+
+
+
+
+Model 3: Among people with diabetes, how long you have diabetes, how does that impact cvd mort. (likely issue w sample size)
+
+```{r}
+
+data%>%
+  filter(!is.na(exposure_diabetes))%>%
+  group_by(racea)%>%
+  count()
+
+```
