@@ -23,15 +23,15 @@ library(cmprsk)
 ```{r}
 
 
-ddi <- read_ipums_ddi("/Users/benszeto/Library/CloudStorage/Box-Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00029.xml")
+ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00029.xml")
 
 data1 <- read_ipums_micro(ddi)
 
-ddi <- read_ipums_ddi("/Users/benszeto/Library/CloudStorage/Box-Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00027.xml")
+ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00027.xml")
 
 data2 <- read_ipums_micro(ddi)
 
-ddi <- read_ipums_ddi("/Users/benszeto/Library/CloudStorage/Box-Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00030.xml")
+ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00030.xml")
 
 data3 <- read_ipums_micro(ddi)
 
