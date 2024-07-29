@@ -82,9 +82,10 @@ data<-data%>%
 data<-data%>%
   mutate(racea=as_factor(RACEA))%>%
   mutate(mortstat=as_factor(MORTSTAT))%>%
-  mutate(morthypr=MORTHYPR)%>%
+  mutate(morthypr=as_factor(MORTHYPR))%>%
+  mutate(sex=as_factor(SEX))%>%
   filter(racea%in%c("Chinese", "Asian Indian", "White", "Filipino"))%>% #selecting Chinese, Asian Indian, Filipino, and White
-  filter(!BMI==0)%>% #filtering out extranious BMIs
+  filter(!BMI==0)%>% #filtering out extraneous BMIs
   filter(BMI<90)%>%
   filter(MORTELIG==1)%>%
   mutate(BMI_R_Cat=ifelse(racea=="White", 
@@ -107,13 +108,17 @@ mutate(CVD_MOR=ifelse(MORTUCODLD%in%c(1, 5), TRUE, FALSE))
 Model 1: Among diabetics, how many die from cvd (look into people w and w/o diabetes) $just look at diabetes, not whether diabetes related
 ```{r}
 data_mod1<-data%>%
+  filter(MORTELIG==1)%>%#Only selecting individuals who are eligible for the mortality data set
   mutate(Diabetes_Lifetime=case_when(
     DIABETICEV==2|MORTDIAB==2~"Diabetic",
     DIABETICEV%in%c(0,7,8,9) & MORTDIAB==9~"Unknown/Not in Universe",
     TRUE~"Non-Diabetic"
   ))%>%
-  mutate(CVDMORT_Diabetes=ifelse(CVD_MOR==TRUE&Diabetes_Lifetime=="Diabetic", TRUE, FALSE))%>%#Whether individual has diabetes and dies from Heart Attack or Stroke
-  filter(MORTELIG==1)
+  mutate(CVDMORT_Diabetes=case_when(
+    CVD_MOR==TRUE&Diabetes_Lifetime=="Diabetic"~2,#2 coded for death from CVD diabetic
+    MORTSTAT==2~0,#0 coded for survivor
+    TRUE~1 #1 coded for all other types of death
+  ))
 
 ```
 
@@ -148,11 +153,11 @@ unique(data$MORTDIAB)
 unique(data$MORTUCODLD)
 
 data_mod2<-data%>%
-  mutate(Diabetes_CVD=ifelse(
-    MORTDIAB==2 & MORTUCODLD %in%c(1,5),
-    TRUE,
-    FALSE
-  ))
+  mutate(Diabetes_CVD=case_when(
+    MORTDIAB==2 & MORTUCODLD %in%c(1,5)~2,#Individual dying from CVD caused by diabetes
+    MORTSTAT==2~0, #0 coded for individual who is presumed alive
+    TRUE~1 #Individual dying from anything else
+    ))
 
 data_mod2%>%
   group_by(Diabetes_CVD, racea)%>%
@@ -169,6 +174,13 @@ data_mod2%>%
  cuminc_test<-cuminc(ftime=data_mod2$exposure_birth,fstatus=data_mod2$Diabetes_CVD, group=data_mod2$racea)
  cuminc_test
  plot(cuminc_test, col = c("black", "blue", "green", "red"), lty=1, ylim=c(0,0.2))
+
+```
+
+```{r}
+covariates_of_interest<-cbind(as_factor(data_mod2$BMI_R_Cat), as_factor(data_mod2$sex))
+
+fine_gray_fit<-crr(data_mod2$exposure_birth,data_mod2$Diabetes_CVD,covariates_of_interest)
 
 ```
 
