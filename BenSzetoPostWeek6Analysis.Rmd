@@ -178,9 +178,23 @@ data_mod2%>%
 ```
 
 ```{r}
-covariates_of_interest<-cbind(as_factor(data_mod2$BMI_R_Cat), as_factor(data_mod2$sex))
+data_mod2%>%
+  select(exposure_birth, BMI_R_Cat, sex, Diabetes_CVD)%>%
+  na.omit()
 
+covariates_of_interest<-cbind(as_factor(data_mod2$BMI_R_Cat), as_factor(data_mod2$sex), as_factor(data_mod2$racea))
+
+covariates_of_interest
 fine_gray_fit<-crr(data_mod2$exposure_birth,data_mod2$Diabetes_CVD,covariates_of_interest)
+
+
+
+summary(fine_gray_fit)
+```
+
+```{r}
+attatch(data_mod2)
+
 
 ```
 
