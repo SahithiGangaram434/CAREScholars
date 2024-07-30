@@ -45,7 +45,6 @@ data3<-data3%>%#Selecting variables of interest from data3
   select(NHISPID, MORTDODY, MORTWT, MORTSTAT)
 
 data<-merge(data1, data2, by="NHISPID")
-data
 data<-merge(data, data3, by="NHISPID")
 
 ```
@@ -57,7 +56,7 @@ data%>%
 
 ```
 
-```{r, defining exposure time since DOB}
+```{r, defining exposure time since DOB(This is what we use for expsoreu. underlying time scale cox)}
 data<-data%>%
   mutate(exposure_birth=ifelse(
     MORTSTAT==1,
@@ -137,7 +136,7 @@ data_mod1%>%
 
  cuminc_test<-cuminc(ftime=data_mod1$exposure_birth,fstatus=data_mod1$CVDMORT_Diabetes, group=data_mod1$racea)
  cuminc_test
- plot(cuminc_test, col = c("black", "blue", "green", "red"), lty=1, ylim=c(0,0.5))
+ plot(cuminc_test, col = c("black", "blue", "green", "red", "black", "blue", "green", "red"), lty=1, ylim=c(0,0.3))
 
 ```
 
@@ -157,7 +156,8 @@ data_mod2<-data%>%
     MORTDIAB==2 & MORTUCODLD %in%c(1,5)~2,#Individual dying from CVD caused by diabetes
     MORTSTAT==2~0, #0 coded for individual who is presumed alive
     TRUE~1 #Individual dying from anything else
-    ))
+    ))%>%
+  filter(MORTELIG==1)
 
 data_mod2%>%
   group_by(Diabetes_CVD, racea)%>%
@@ -168,29 +168,54 @@ data_mod2%>%
   arrange(desc(racea))
   
 
+data_mod2%>%
+  group_by(racea)%>%
+  summarize(
+    n(),
+    mean(exposure_birth)
+    )%>%
+  arrange(desc(racea))
+
 ```
 
 ```{r competing risk analysis exposure time since birth, }
  cuminc_test<-cuminc(ftime=data_mod2$exposure_birth,fstatus=data_mod2$Diabetes_CVD, group=data_mod2$racea)
  cuminc_test
- plot(cuminc_test, col = c("black", "blue", "green", "red"), lty=1, ylim=c(0,0.2))
+ plot(cuminc_test, col = c("black", "blue", "green", "red", "black", "blue", "green", "red"), lty=1, ylim=c(0,1))
 
 ```
 
 ```{r}
-data_mod2%>%
-  select(exposure_birth, BMI_R_Cat, sex, Diabetes_CVD)%>%
+data_mod2<-data_mod2%>%
+  select(exposure_birth, BMI_R_Cat, sex, Diabetes_CVD, racea)%>%
+  filter(!racea=="White")%>%#Removing whites allows code to run
   na.omit()
 
 covariates_of_interest<-cbind(as_factor(data_mod2$BMI_R_Cat), as_factor(data_mod2$sex), as_factor(data_mod2$racea))
 
-covariates_of_interest
 fine_gray_fit<-crr(data_mod2$exposure_birth,data_mod2$Diabetes_CVD,covariates_of_interest)
 
 
-
+#Should I make dummy variables for each race?
+#How to resolve issue with large number of whites
 summary(fine_gray_fit)
 ```
+
+#Switch to cox if just doing general mortality
+relevel command dplyr
+Cox part of survival package
+```{r}
+library(casebase)
+model1 <- fitSmoothHazard(Diabetes_CVD ~ exposure_birth + sex + BMI_R_Cat + racea, 
+                          data = data_mod2, 
+                          ratio = 100,
+                          time = "exposure_birth")
+summary(model1)
+
+
+
+```
+
 
 ```{r}
 attatch(data_mod2)
@@ -209,5 +234,13 @@ data%>%
   filter(!is.na(exposure_diabetes))%>%
   group_by(racea)%>%
   count()
+
+```
+
+
+```{r}
+data%>%
+  ggplot()+
+  geom_histogram(aes(x=exposure_diabetes))
 
 ```

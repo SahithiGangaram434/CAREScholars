@@ -1,0 +1,136 @@
+---
+title: "AllCauseMortalityPost7_30"
+author: "Ben Szeto"
+date: "2024-07-30"
+output: pdf_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, loading libraries}
+library(tidyverse)
+library(knitr)
+library(plotly)
+library(ggeffects)
+library(ggformula)
+library(ipumsr)
+library(survival)
+```
+
+
+```{r}
+
+
+ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00029.xml")
+
+data1 <- read_ipums_micro(ddi)
+
+ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00027.xml")
+
+data2 <- read_ipums_micro(ddi)
+
+ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00030.xml")
+
+data3 <- read_ipums_micro(ddi)
+
+```
+
+```{r, data merging}
+data1<-data1%>%#Selecting variables of interest from data1
+  select(NHISPID, DIABETICAGE, DIAYRSAGO)
+
+data3<-data3%>%#Selecting variables of interest from data3
+  select(NHISPID, MORTDODY, MORTWT, MORTSTAT)
+
+data<-merge(data1, data2, by="NHISPID")
+data<-merge(data, data3, by="NHISPID")
+
+```
+```{r}
+data%>%
+  filter(!MORTDODY==9999)%>%
+  select(MORTDODY)%>%
+  arrange(desc(MORTDODY))
+
+```
+
+```{r, defining exposure time since DOB(This is what we use for expsoreu. underlying time scale cox)}
+data<-data%>%
+  mutate(exposure_birth=ifelse(
+    MORTSTAT==1,
+    MORTDODY-YEAR+AGE,#If dead, time ends at year of death
+    2019-YEAR+AGE#If alive or NIU, time ends at 2019
+    ))
+
+```
+
+```{r, defining exposure time since Diabetes Diagnosis}
+
+data<-data%>%
+  mutate(exposure_diabetes=ifelse(
+    !DIABETICAGE==96 & !MORTDODY==9999,
+    (AGE-DIABETICAGE)+(MORTDODY-YEAR),
+    NA
+  ))
+
+```
+
+```{r, data cleaning}
+data<-data%>%
+  filter(RACEA%in%c(100, 340, 411, 412))%>%
+  mutate(racea=as_factor(RACEA))%>%
+  mutate(mortstat=as_factor(MORTSTAT))%>%
+  mutate(morthypr=as_factor(MORTHYPR))%>%
+  mutate(sex=as_factor(SEX))%>%
+  filter(racea%in%c("Chinese", "Asian Indian", "White", "Filipino"))%>% #selecting Chinese, Asian Indian, Filipino, and White
+  filter(!BMI==0)%>% #filtering out extraneous BMIs
+  filter(BMI<90)%>%
+  filter(MORTELIG==1)%>%
+  mutate(BMI_R_Cat=ifelse(racea=="White", 
+                          case_when(BMI<18.5~"Underweight",#BMI thresholds for Whites
+                                    BMI>=18.5 & BMI<25~"Normal Weight",
+                                    BMI>=25 & BMI <30~"Overweight",
+                                    BMI>=30~"Obese"),
+                          case_when(BMI<18.5~"Underweight",#BMI thresholds for Asians (Considered all races not White)
+                                    BMI>=18.5 & BMI<23~"Normal Weight",
+                                    BMI>=23 & BMI <27.5~"Overweight",
+                                    BMI>=27.5~"Obese")))#27.5 is obese for Asians
+#mutate(CVD_MOR=ifelse(MORTUCODLD%in%c(1, 5), TRUE, FALSE))%>%
+  
+```
+
+```{r}
+data_practice<-data%>%
+  mutate(Diabetes_Lifetime=case_when(
+    DIABETICEV==2|MORTDIAB==2~"Diabetic",
+    DIABETICEV%in%c(0,7,8,9) & MORTDIAB==9~"Unknown/Not in Universe",
+    TRUE~"Non-Diabetic"
+  ))%>%
+  filter(!Diabetes_Lifetime=="Unknwon/Not in Universe")%>%
+  mutate(Diab_ACM=case_when(
+    MORTSTAT==1&Diabetes_Lifetime=="Diabetic"~"Diabetic Death",
+    MORTSTAT==2~"Assumed Alive",
+    TRUE~"Other Death"
+  ))%>%
+  #select(MORTELIG, MORTSTAT, Diabetes_Lifetime, Diab_ACM)%>%
+  mutate(MORTSTAT=as_factor(MORTSTAT))%>%
+  mutate(Diab_ACM_binary=ifelse(Diab_ACM=="Diabetic Death", TRUE, FALSE))%>%
+  as_data_frame()
+
+data_practice%>%
+  ggplot()+
+  geom_bar(aes(x=Diab_ACM_binary))
+```
+
+```{r, cox model}
+cox_summary<-coxph(Surv(exposure_birth, Diab_ACM_binary) ~ racea + SEX + BMI_R_Cat, data = data_practice)%>%
+  summary()
+
+
+cox_summary
+coxcoefficients<-cox_summary$coefficients #removing empty coefficients
+coxcoefficients[!is.na(coxcoefficients[,1]),] #removing empty coefficients
+
+
+```
