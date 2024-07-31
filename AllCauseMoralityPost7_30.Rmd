@@ -78,7 +78,6 @@ data<-data%>%
 
 ```{r, data cleaning}
 data<-data%>%
-  filter(RACEA%in%c(100, 340, 411, 412))%>%
   mutate(racea=as_factor(RACEA))%>%
   mutate(mortstat=as_factor(MORTSTAT))%>%
   mutate(morthypr=as_factor(MORTHYPR))%>%
@@ -100,6 +99,58 @@ data<-data%>%
   
 ```
 
+```{r education recoding}
+
+data%>%
+  select(EDUCREC2)%>%
+  mutate(Education=as_factor(EDUCREC2))%>%
+  ggplot()+
+  geom_bar(aes(x=Education))+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+data<-data%>%#recoding education
+  filter(!EDUCREC2==0)%>%
+  mutate(Education_recode=case_when(
+    EDUCREC2%in%c(10,20,30,31,32,40,41)~"Did Not Complete High School",
+    EDUCREC2==42~"High School Grad",
+    EDUCREC2%in%c(50,51,52,53)~"Some College",
+    EDUCREC2==54~"4 years college/Bachelor's degree",
+    EDUCREC2==60~"Post Bachelor",
+    EDUCREC2%in%c(96, 97,98,99)~"Unknown",
+    TRUE~"Check Again"
+  ))
+
+data%>%
+    ggplot()+
+    geom_bar(aes(x=Education_recode, fill=racea), position="dodge")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+```
+
+```{r}
+data%>%
+  select(EARNINGS)%>%
+  ggplot()+
+  geom_bar(aes(x=as_factor(EARNINGS)))+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+
+data<-data%>%
+  mutate(Earnings_recode=case_when(
+    EARNINGS%in%c(0,97,98,99)~"NIU/Unknown",
+    EARNINGS%in%c(1,2,3,4,5)~"Cat1",
+    EARNINGS%in%c(5,6,7,8)~"Cat2",
+    EARNINGS%in%c(9,10,11)~"Cat3"
+  ))
+
+data%>%
+  ggplot()+
+  geom_bar(aes(x=Earnings_recode))
+
+data<-data%>%
+  filter(!Earnings_recode=="NIU/Unknown")#Sample size goes down significantly when needing income information
+```
+
 ```{r}
 data_practice<-data%>%
   mutate(Diabetes_Lifetime=case_when(
@@ -114,17 +165,69 @@ data_practice<-data%>%
     TRUE~"Other Death"
   ))%>%
   #select(MORTELIG, MORTSTAT, Diabetes_Lifetime, Diab_ACM)%>%
-  mutate(MORTSTAT=as_factor(MORTSTAT))%>%
-  mutate(Diab_ACM_binary=ifelse(Diab_ACM=="Diabetic Death", TRUE, FALSE))%>%
-  as_data_frame()
+  mutate(Diab_ACM_binary=ifelse(Diab_ACM=="Diabetic Death", TRUE, FALSE))%>%#Diabetes and dead (not necessisarily underlying cause)
+  mutate(Diab_Und_ACM=ifelse(
+    MORTSTAT==1 & MORTDIAB==2,
+    TRUE,
+    FALSE
+  ))
 
-data_practice%>%
-  ggplot()+
-  geom_bar(aes(x=Diab_ACM_binary))
+
+# data_practice%>%
+#   ggplot()+
+#   geom_bar(aes(x=Diab_ACM_binary))
 ```
 
-```{r, cox model}
-cox_summary<-coxph(Surv(exposure_birth, Diab_ACM_binary) ~ racea + SEX + BMI_R_Cat, data = data_practice)%>%
+```{r}
+data<-data%>%
+  mutate(Diab_Und_ACM=ifelse(
+    MORTSTAT==1 & MORTDIAB==2,
+    TRUE,
+    FALSE
+  ))
+
+
+data_practice%>%
+  select(Diab_Und_ACM, MORTSTAT, MORTDIAB)
+data
+```
+
+```{r}
+data_practice%>%
+  group_by(racea, Diab_ACM_binary)%>%
+  summarise(
+    n()
+  )
+
+data_practice%>%
+  group_by(racea, Diab_Und_ACM)%>%
+  summarise(
+    n()
+    
+  )
+
+```
+
+
+
+
+
+
+
+```{r, cox model 1: All Mortality Diabetic}
+cox_summary<-coxph(Surv(exposure_birth, Diab_ACM_binary) ~ racea + SEX + BMI_R_Cat:racea, data = data_practice)%>%
+  summary()
+
+
+cox_summary
+coxcoefficients<-cox_summary$coefficients #removing empty coefficients
+coxcoefficients[!is.na(coxcoefficients[,1]),] #removing empty coefficients
+
+
+```
+
+```{r, cox model 2: Diabetes specific mortality}
+cox_summary<-coxph(Surv(exposure_birth, Diab_Und_ACM) ~ racea + SEX + BMI_R_Cat+Education_recode+Earnings_recode, data = data_practice)%>%
   summary()
 
 
