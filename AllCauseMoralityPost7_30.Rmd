@@ -16,6 +16,7 @@ library(ggeffects)
 library(ggformula)
 library(ipumsr)
 library(survival)
+library(survminer)
 ```
 
 
@@ -127,6 +128,51 @@ data%>%
 
 ```
 
+
+```{r smoking status recode}
+data%>%
+  ggplot()+
+  geom_bar(aes(x=as_factor(SMOKESTATUS2)))+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+data<-data%>%
+  mutate(Smoking_recode=case_when(
+    SMOKESTATUS2%in%c(10,11,12,13)~"Current Smoker",
+    SMOKESTATUS2%in%c(20,40)~"Former Smoker",
+    SMOKESTATUS2%in%c(30)~"Never Smoked",
+    SMOKESTATUS2==90~"Unknown",
+    TRUE~"Check Code"
+  ))
+
+data%>%
+  ggplot()+
+  geom_bar(aes(x=Smoking_recode))
+
+```
+
+```{r insurance coverage recode}
+data%>%
+  ggplot()+
+  geom_bar(aes(x=as_factor(HINOTCOVE)))
+
+
+data<-data%>%
+  mutate(Insurance_recode=case_when(
+    HINOTCOVE==1~"Covered",
+    HINOTCOVE==2~"Uncovered",
+    HINOTCOVE%in%c(7,8,9)~"Unknown",
+    TRUE~"Check Code"
+    
+  ))
+
+data%>%
+  ggplot()+
+  geom_bar(aes(x=Insurance_recode))
+
+```
+
+
+
 ```{r}
 data%>%
   select(EARNINGS)%>%
@@ -158,7 +204,7 @@ data_practice<-data%>%
     DIABETICEV%in%c(0,7,8,9) & MORTDIAB==9~"Unknown/Not in Universe",
     TRUE~"Non-Diabetic"
   ))%>%
-  filter(!Diabetes_Lifetime=="Unknwon/Not in Universe")%>%
+  filter(!Diabetes_Lifetime=="Unknown/Not in Universe")%>%
   mutate(Diab_ACM=case_when(
     MORTSTAT==1&Diabetes_Lifetime=="Diabetic"~"Diabetic Death",
     MORTSTAT==2~"Assumed Alive",
@@ -226,14 +272,27 @@ coxcoefficients[!is.na(coxcoefficients[,1]),] #removing empty coefficients
 
 ```
 
+read: https://socialsciences.mcmaster.ca/jfox/Books/Companion/appendices/Appendix-Cox-Regression.pdf
+
 ```{r, cox model 2: Diabetes specific mortality}
-cox_summary<-coxph(Surv(exposure_birth, Diab_Und_ACM) ~ racea + SEX + BMI_R_Cat+Education_recode+Earnings_recode, data = data_practice)%>%
-  summary()
+
+cox_mod2<-coxph(Surv(exposure_birth, Diab_Und_ACM) ~ racea + SEX + BMI_R_Cat+Education_recode+Earnings_recode+Smoking_recode+Insurance_recode, data = data_practice)
+cox_summary<-summary(cox_mod2)
 
 
 cox_summary
 coxcoefficients<-cox_summary$coefficients #removing empty coefficients
 coxcoefficients[!is.na(coxcoefficients[,1]),] #removing empty coefficients
+
+
+plot(survfit(cox_mod2), xlab="Years",ylab="Proportion Not Dead due to Diabetes", ylim=c(0.75,1))
+
+
+
+```
+
+```{r}
+data_racea<-with(data, data.frame())
 
 
 ```
