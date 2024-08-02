@@ -1,13 +1,13 @@
 ---
-title: "AllCauseMortalityPost7_30"
+title: "Table1Bs"
 author: "Ben Szeto"
-date: "2024-07-30"
-output: pdf_document
+date: "2024-08-01"
+output: html_document
 ---
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
-
 ```{r, loading libraries}
 library(tidyverse)
 library(knitr)
@@ -37,6 +37,7 @@ data3 <- read_ipums_micro(ddi)
 
 ```
 
+
 ```{r, data merging}
 data1<-data1%>%#Selecting variables of interest from data1
   select(NHISPID, DIABETICAGE, DIAYRSAGO)
@@ -55,6 +56,7 @@ data%>%
   arrange(desc(MORTDODY))
 
 ```
+
 
 ```{r, defining exposure time since DOB(This is what we use for expsoreu. underlying time scale cox)}
 data<-data%>%
@@ -100,14 +102,8 @@ data<-data%>%
   
 ```
 
-```{r education recoding}
+```{r recoding}
 
-data%>%
-  select(EDUCREC2)%>%
-  mutate(Education=as_factor(EDUCREC2))%>%
-  ggplot()+
-  geom_bar(aes(x=Education))+
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
 data<-data%>%#recoding education
   filter(!EDUCREC2==0)%>%
@@ -121,19 +117,7 @@ data<-data%>%#recoding education
     TRUE~"Check Again"
   ))
 
-data%>%
-    ggplot()+
-    geom_bar(aes(x=Education_recode, fill=racea), position="dodge")+
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
-```
-
-
-```{r smoking status recode}
-data%>%
-  ggplot()+
-  geom_bar(aes(x=as_factor(SMOKESTATUS2)))+
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
 data<-data%>%
   mutate(Smoking_recode=case_when(
@@ -143,17 +127,6 @@ data<-data%>%
     SMOKESTATUS2==90~"Unknown",
     TRUE~"Check Code"
   ))
-
-data%>%
-  ggplot()+
-  geom_bar(aes(x=Smoking_recode))
-
-```
-
-```{r insurance coverage recode}
-data%>%
-  ggplot()+
-  geom_bar(aes(x=as_factor(HINOTCOVE)))
 
 
 data<-data%>%
@@ -165,14 +138,6 @@ data<-data%>%
     
   ))
 
-data%>%
-  ggplot()+
-  geom_bar(aes(x=Insurance_recode))+
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
-
-```
-
-```{r}
 
 data<-data%>%
   mutate(USBorn_Recode=case_when(
@@ -180,21 +145,6 @@ data<-data%>%
          USBORN==20~"Born in US"))%>%
   mutate(USBorn_Recode=relevel(droplevels(as_factor(USBorn_Recode)), "Born in US"))
 
-data%>%
-  group_by(USBorn_Recode)%>%
-  count()
-
-
-```
-
-
-
-```{r}
-data%>%
-  select(EARNINGS)%>%
-  ggplot()+
-  geom_bar(aes(x=as_factor(EARNINGS)))+
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
 
 data<-data%>%
@@ -205,15 +155,7 @@ data<-data%>%
     EARNINGS%in%c(9,10,11)~"Cat3"
   ))
 
-data%>%
-  ggplot()+
-  geom_bar(aes(x=Earnings_recode))
 
-data<-data%>%
-  filter(!Earnings_recode=="NIU/Unknown")#Sample size goes down significantly when needing income information
-```
-
-```{r}
 data_practice<-data%>%
   mutate(Diabetes_Lifetime=case_when(
     DIABETICEV==2|MORTDIAB==2~"Diabetic",
@@ -234,90 +176,55 @@ data_practice<-data%>%
     FALSE
   ))
 
-
-# data_practice%>%
-#   ggplot()+
-#   geom_bar(aes(x=Diab_ACM_binary))
-```
-
-```{r}
-data<-data%>%
-  mutate(Diab_Und_ACM=ifelse(
-    MORTSTAT==1 & MORTDIAB==2,
-    TRUE,
-    FALSE
-  ))
-
-
-data_practice%>%
-  select(Diab_Und_ACM, MORTSTAT, MORTDIAB)
-data
-```
-
-```{r}
-data_practice%>%
-  group_by(racea, Diab_ACM_binary)%>%
-  summarise(
-    n()
-  )
-
-data_practice%>%
-  group_by(racea, Diab_Und_ACM)%>%
-  summarise(
-    n()
-    
-  )
-
-```
-
-
-
-
-
-
-
-```{r, cox model 1: All Mortality Diabetic}
-cox_summary<-coxph(Surv(exposure_birth, Diab_ACM_binary) ~ racea + SEX + BMI_R_Cat:racea, data = data_practice)%>%
-  summary()
-
-
-cox_summary
-coxcoefficients<-cox_summary$coefficients #removing empty coefficients
-coxcoefficients[!is.na(coxcoefficients[,1]),] #removing empty coefficients
-
-
-```
-
-read: https://socialsciences.mcmaster.ca/jfox/Books/Companion/appendices/Appendix-Cox-Regression.pdf
-
-```{r, cox model 2: Diabetes specific mortality}
 data_practice<-data_practice%>%
   mutate(sex=as_factor(SEX))%>%#removing extraneous levels
   mutate(sex=relevel(droplevels(sex), "Male"))%>%
   mutate(racea2=droplevels(racea))%>%
   mutate(racea2=relevel(racea2, "White"))%>%
   mutate(Smoking_recode=relevel(as_factor(Smoking_recode), "Never Smoked"))
-  
-cox_mod2<-coxph(Surv(exposure_birth, Diab_Und_ACM) ~ racea2 + sex + BMI_R_Cat+Education_recode+Earnings_recode+Smoking_recode+Insurance_recode+USBorn_Recode, data = data_practice)
-
-
-cox_summary<-summary(cox_mod2)
-cox_summary
-#Removing empty coefficients
-# coxcoefficients<-cox_summary$coefficients #removing empty coefficients
-# coxcoefficients[!is.na(coxcoefficients[,1]),] #removing empty coefficients
-
-
-plot(survfit(cox_mod2), xlab="Years",ylab="Proportion Not Dead due to Diabetes", ylim=c(0.75,1))
-
-
-
-ggforest(cox_mod2, fontsize = 0.5)
 
 ```
 
 ```{r}
-data_racea<-with(data, data.frame())
+library(table1)
+```
+
+```{r}
+data_table1<-data_practice%>%
+  mutate(DIABETICAGE2=ifelse(DIABETICAGE==96, NA, DIABETICAGE))%>%
+  mutate(Lifespan_Diabetic=ifelse(
+    Diabetes_Lifetime=="Diabetic"&MORTSTAT==1,
+    exposure_birth,
+    NA
+  ))%>%
+  mutate(HYPERTENEV_recode=case_when(#Go back and relevel for regression?
+    HYPERTENEV==1~"No",
+    HYPERTENEV==2~"Yes",
+    HYPERTENEV%in%c(7,8,9)~"Unknown",
+    TRUE~NA
+
+  ))
+
+#table1(~ factor(sex) + age + factor(ulcer) + thickness | status, data=melanoma2)
+table1(~factor(sex)+factor(Smoking_recode)+AGE+Education_recode+Earnings_recode+Insurance_recode+USBorn_Recode+DIABETICAGE2+Lifespan_Diabetic+factor(BMI_R_Cat)+factor(HYPERTENEV_recode) |racea2, data=data_table1)
+
+
+```
+
+```{r}
+data_practice%>%
+  select(HYPERTENEV)%>%
+  mutate(HYPERTENEV_recode=case_when(
+    HYPERTENEV==1~"No",
+    HYPERTENEV==2~"Yes",
+    HYPERTENEV%in%c(7,8,9)~"Unknown",
+    TRUE~NA
+
+  ))%>%
+  group_by(HYPERTENEV_recode)%>%
+  count()
+  
+
 
 
 ```
