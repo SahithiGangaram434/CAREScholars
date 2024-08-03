@@ -220,6 +220,7 @@ data_practice<-data%>%
     DIABETICEV%in%c(0,7,8,9) & MORTDIAB==9~"Unknown/Not in Universe",
     TRUE~"Non-Diabetic"
   ))%>%
+  mutate(Diabetes_Lifetime=relevel(as_factor(Diabetes_Lifetime), "Non-Diabetic"))%>%
   filter(!Diabetes_Lifetime=="Unknown/Not in Universe")%>%
   mutate(Diab_ACM=case_when(
     MORTSTAT==1&Diabetes_Lifetime=="Diabetic"~"Diabetic Death",
@@ -298,7 +299,7 @@ data_practice<-data_practice%>%
   mutate(racea2=relevel(racea2, "White"))%>%
   mutate(Smoking_recode=relevel(as_factor(Smoking_recode), "Never Smoked"))
   
-cox_mod2<-coxph(Surv(exposure_birth, Diab_Und_ACM) ~ racea2 + sex + BMI_R_Cat+Education_recode+Earnings_recode+Smoking_recode+Insurance_recode+USBorn_Recode, data = data_practice)
+cox_mod2<-coxph(Surv(exposure_birth, Diab_Und_ACM) ~ strata(racea2) + sex + BMI_R_Cat+Education_recode+Earnings_recode+Smoking_recode+Insurance_recode+USBorn_Recode, data = data_practice)
 
 
 cox_summary<-summary(cox_mod2)
@@ -316,8 +317,25 @@ ggforest(cox_mod2, fontsize = 0.5)
 
 ```
 
-```{r}
-data_racea<-with(data, data.frame())
+```{r, model 3 ACM}
 
+data_practice<-data_practice%>%
+  mutate(Mort_recode=ifelse(MORTSTAT==1, TRUE, FALSE))
+
+cox_mod3<-coxph(Surv(exposure_birth, Mort_recode) ~ racea2 + sex + Diabetes_Lifetime+ BMI_R_Cat+Education_recode+Earnings_recode+Smoking_recode+Insurance_recode+USBorn_Recode, data = data_practice)
+
+
+cox_summary<-summary(cox_mod3)
+cox_summary
+#Removing empty coefficients
+# coxcoefficients<-cox_summary$coefficients #removing empty coefficients
+# coxcoefficients[!is.na(coxcoefficients[,1]),] #removing empty coefficients
+
+
+plot(survfit(cox_mod3), xlab="Years",ylab="Proportion Not Dead due to Diabetes", ylim=c(0.75,1))
+
+
+
+ggforest(cox_mod3, fontsize = 0.5)
 
 ```
