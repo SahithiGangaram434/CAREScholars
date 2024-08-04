@@ -2,7 +2,9 @@
 title: "AllCauseMortalityPost7_30"
 author: "Ben Szeto"
 date: "2024-07-30"
-output: pdf_document
+output:
+  html_document:
+    df_print: paged
 ---
 
 ```{r setup, include=FALSE}
@@ -23,33 +25,33 @@ library(survminer)
 ```{r Ben Windows Paths}
 
 
-# ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00029.xml")
-# 
-# data1 <- read_ipums_micro(ddi)
-# 
-# ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00027.xml")
-# 
-# data2 <- read_ipums_micro(ddi)
-# 
-# ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00030.xml")
-# 
-# data3 <- read_ipums_micro(ddi)
+ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00029.xml")
+
+data1 <- read_ipums_micro(ddi)
+
+ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00027.xml")
+
+data2 <- read_ipums_micro(ddi)
+
+ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00030.xml")
+
+data3 <- read_ipums_micro(ddi)
 
 ```
 
 ```{r Ben Mac Path}
 
-ddi <- read_ipums_ddi("/Users/benszeto/Library/CloudStorage/Box-Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00029.xml")
-
-data1 <- read_ipums_micro(ddi)
-
-ddi <- read_ipums_ddi("/Users/benszeto/Library/CloudStorage/Box-Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00027.xml")
-
-data2 <- read_ipums_micro(ddi)
-
-ddi <- read_ipums_ddi("/Users/benszeto/Library/CloudStorage/Box-Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00030.xml")
-
-data3 <- read_ipums_micro(ddi)
+# ddi <- read_ipums_ddi("/Users/benszeto/Library/CloudStorage/Box-Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00029.xml")
+# 
+# data1 <- read_ipums_micro(ddi)
+# 
+# ddi <- read_ipums_ddi("/Users/benszeto/Library/CloudStorage/Box-Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00027.xml")
+# 
+# data2 <- read_ipums_micro(ddi)
+# 
+# ddi <- read_ipums_ddi("/Users/benszeto/Library/CloudStorage/Box-Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00030.xml")
+# 
+# data3 <- read_ipums_micro(ddi)
 
 
 ```
@@ -324,7 +326,7 @@ plot(survfit(cox_mod2), xlab="Years",ylab="Proportion Not Dead due to Diabetes",
 
 
 
-ggforest(cox_mod2, fontsize = 0.5)
+#ggforest(cox_mod2, fontsize = 0.5)
 
 ```
 
