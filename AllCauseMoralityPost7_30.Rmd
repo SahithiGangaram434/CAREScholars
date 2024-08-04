@@ -4,6 +4,7 @@ author: "Ben Szeto"
 date: "2024-07-30"
 output: pdf_document
 ---
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
@@ -18,7 +19,6 @@ library(ipumsr)
 library(survival)
 library(survminer)
 ```
-
 
 ```{r Ben Windows Paths}
 
@@ -36,7 +36,6 @@ library(survminer)
 # data3 <- read_ipums_micro(ddi)
 
 ```
-
 
 ```{r Ben Mac Path}
 
@@ -66,6 +65,7 @@ data<-merge(data1, data2, by="NHISPID")
 data<-merge(data, data3, by="NHISPID")
 
 ```
+
 ```{r}
 data%>%
   filter(!MORTDODY==9999)%>%
@@ -146,7 +146,6 @@ data%>%
 
 ```
 
-
 ```{r smoking status recode}
 data%>%
   ggplot()+
@@ -204,8 +203,6 @@ data%>%
 
 
 ```
-
-
 
 ```{r}
 data%>%
@@ -291,12 +288,6 @@ data_practice%>%
 
 ```
 
-
-
-
-
-
-
 ```{r, cox model 1: All Mortality Diabetic}
 cox_summary<-coxph(Surv(exposure_birth, Diab_ACM_binary) ~ racea + SEX + BMI_R_Cat:racea, data = data_practice)%>%
   summary()
@@ -309,7 +300,7 @@ coxcoefficients[!is.na(coxcoefficients[,1]),] #removing empty coefficients
 
 ```
 
-read: https://socialsciences.mcmaster.ca/jfox/Books/Companion/appendices/Appendix-Cox-Regression.pdf
+read: <https://socialsciences.mcmaster.ca/jfox/Books/Companion/appendices/Appendix-Cox-Regression.pdf>
 
 ```{r, cox model 2: Diabetes specific mortality}
 data_practice<-data_practice%>%
