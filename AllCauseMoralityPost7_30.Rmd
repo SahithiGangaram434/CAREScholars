@@ -353,3 +353,38 @@ cox_summary
 ggforest(cox_mod3, fontsize = 0.5)#Issues displaying interaction term
 
 ```
+
+
+```{r, isolate diabetes interaction term for race}
+data_practice<-data_practice%>%#manually making the interaction term
+  mutate(Diabetes_Lifetime_Race=as_factor(ifelse(
+    Diabetes_Lifetime=="Diabetic",
+    case_when(
+      racea2=="White"~"White Diabetic",
+      racea2=="Asian Indian"~"Asian Indian Diabetic",
+      racea2=="Filipino" ~"Filipino Diabetic",
+      racea2=="Chinese"~"Chinese Diabetic",
+      TRUE~"Check Code"),
+    "Non-Diabetic"
+  )))%>%
+  mutate(Diabetes_Lifetime_Race=relevel(Diabetes_Lifetime_Race, "Non-Diabetic"))
+
+
+
+cox_mod3<-coxph(Surv(exposure_birth, Mort_recode) ~ racea2 + sex + Diabetes_Lifetime_Race+ BMI_R_Cat+Education_recode+Earnings_recode+Smoking_recode+Insurance_recode+USBorn_Recode, data = data_practice)
+
+
+cox_summary<-summary(cox_mod3)
+cox_summary
+
+
+plot(survfit(cox_mod3), xlab="Years",ylab="Proportion Not Dead due to Diabetes", ylim=c(0,1))
+
+
+
+ggforest(cox_mod3, fontsize = 0.5)#Issues displaying interaction term
+
+
+```
+
+
