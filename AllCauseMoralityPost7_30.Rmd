@@ -232,6 +232,7 @@ data<-data%>%
 
 ```{r}
 data_practice<-data%>%
+  filter(HISPYN==1)%>%
   mutate(Diabetes_Lifetime=case_when(
     DIABETICEV==2|MORTDIAB==2~"Diabetic",
     DIABETICEV%in%c(0,7,8,9) & MORTDIAB==9~"Unknown/Not in Universe",
@@ -254,6 +255,7 @@ data_practice<-data%>%
     FALSE
   ))
 
+  
 
 # data_practice%>%
 #   ggplot()+
@@ -311,7 +313,8 @@ data_practice<-data_practice%>%
   mutate(racea2=droplevels(racea))%>%
   mutate(racea2=relevel(racea2, "White"))%>%
   mutate(Smoking_recode=relevel(as_factor(Smoking_recode), "Never Smoked"))
-  
+
+
 cox_mod2<-coxph(Surv(exposure_birth, Diab_Und_ACM) ~ strata(racea2) + sex + BMI_R_Cat+Education_recode+Earnings_recode+Smoking_recode+Insurance_recode+USBorn_Recode, data = data_practice)
 
 
