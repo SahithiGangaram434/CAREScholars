@@ -50,10 +50,10 @@ data<-merge(data, data3, by="NHISPID")
 
 ```
 ```{r}
-data%>%
-  filter(!MORTDODY==9999)%>%
-  select(MORTDODY)%>%
-  arrange(desc(MORTDODY))
+# data%>%
+#   filter(!MORTDODY==9999)%>%
+#   select(MORTDODY)%>%
+#   arrange(desc(MORTDODY))
 
 ```
 
