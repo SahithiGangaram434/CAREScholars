@@ -183,6 +183,10 @@ data_practice<-data_practice%>%
   mutate(racea2=relevel(racea2, "White"))%>%
   mutate(Smoking_recode=relevel(as_factor(Smoking_recode), "Never Smoked"))
 
+
+
+data_practice<-data_practice%>%
+  filter(HISPYN==1)
 ```
 
 ```{r}
