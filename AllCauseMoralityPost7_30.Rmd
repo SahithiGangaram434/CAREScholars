@@ -216,12 +216,13 @@ data%>%
 
 
 data<-data%>%
-  mutate(Earnings_recode=case_when(
+  mutate(Earnings_recode=as_factor(case_when(
     EARNINGS%in%c(0,97,98,99)~"NIU/Unknown",
-    EARNINGS%in%c(1,2,3,4,5)~"Cat1",
-    EARNINGS%in%c(5,6,7,8)~"Cat2",
-    EARNINGS%in%c(9,10,11)~"Cat3"
-  ))
+    EARNINGS%in%c(1,2,3,4,5,6)~"Low Income ($1-$34,999)",
+    EARNINGS%in%c(7,8,9,10)~"Middle Income($35,000-$74,999)",
+    EARNINGS==11~"High Income(>$75,000)"
+  )))%>%
+  mutate(Earnings_recode=factor(Earnings_recode, levels=c("Low Income ($1-$34,999)", "Middle Income($35,000-$74,999)","High Income(>$75,000)","NIU/Unknown"  )))
 
 data%>%
   ggplot()+
@@ -337,7 +338,8 @@ plot(survfit(cox_mod2), xlab="Years",ylab="Proportion Not Dead due to Diabetes",
 ```{r, model 3 ACM}
 
 data_practice<-data_practice%>%
-  mutate(Mort_recode=ifelse(MORTSTAT==1, TRUE, FALSE))
+  mutate(Mort_recode=ifelse(MORTSTAT==1, TRUE, FALSE))%>%
+  mutate(Mortality_Status=ifelse(MORTSTAT==1, "Presummed Dead", "Presummed Alive"))
   
 
 cox_mod3<-coxph(Surv(exposure_birth, Mort_recode) ~ racea2 + sex + Diabetes_Lifetime:racea2+ BMI_R_Cat+Education_recode+Earnings_recode+Smoking_recode+Insurance_recode+USBorn_Recode, data = data_practice)
@@ -420,11 +422,16 @@ data_table1<-data_practice%>%
     HYPERTENEV==2~"Yes",
     HYPERTENEV%in%c(7,8,9)~"Unknown",
     TRUE~NA
+  ))%>%
+  mutate(Education_recode=factor(Education_recode, levels=c("Did Not Complete High School", "High School Grad","Some College", "4 years college/Bachelor's degree", "Post Bachelor", "Unknown")))%>%
+  mutate(BMI_R_Cat=factor(BMI_R_Cat, levels=c("Underweight", "Normal Weight","Overweight", "Obese")))#Reordering levels
 
-  ))
+
+
+
 
 #table1(~ factor(sex) + age + factor(ulcer) + thickness | status, data=melanoma2)
-table1(~factor(sex)+factor(Smoking_recode)+AGE+Education_recode+Earnings_recode+Insurance_recode+USBorn_Recode+DIABETICAGE2+Lifespan_Diabetic+factor(BMI_R_Cat)+factor(HYPERTENEV_recode) |racea2, data=data_table1)
+table1(~factor(sex)+factor(Smoking_recode)+AGE+Education_recode+Earnings_recode+Insurance_recode+USBorn_Recode+DIABETICAGE2+Lifespan_Diabetic+factor(BMI_R_Cat)+factor(HYPERTENEV_recode)+Mortality_Status |racea2, data=data_table1)
 
 
 ```
