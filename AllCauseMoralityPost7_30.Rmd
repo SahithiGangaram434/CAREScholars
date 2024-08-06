@@ -326,7 +326,7 @@ cox_summary
 # coxcoefficients[!is.na(coxcoefficients[,1]),] #removing empty coefficients
 
 
-plot(survfit(cox_mod2), xlab="Years",ylab="Proportion Not Dead due to Diabetes", ylim=c(0.75,1))
+plot(survfit(cox_mod2), xlab="Years",ylab="Proportion Not Dead due to Diabetes", ylim=c(0.85,1))
 
 
 
@@ -379,12 +379,30 @@ cox_summary<-summary(cox_mod3)
 cox_summary
 
 
-plot(survfit(cox_mod3), xlab="Years",ylab="Proportion Not Dead due to Diabetes", ylim=c(0,1))
 
 
 
 ggforest(cox_mod3, fontsize = 0.5)#Issues displaying interaction term
 
+
+cox_mod3<-coxph(Surv(exposure_birth, Mort_recode) ~ strata(racea2) + sex + Diabetes_Lifetime_Race+ BMI_R_Cat+Education_recode+Earnings_recode+Smoking_recode+Insurance_recode+USBorn_Recode, data = data_practice)
+
+
+
+plot(survfit(cox_mod3), xlab="Years",ylab="Proportion Alive", ylim=c(0.3,1), xlim=c(40,90))
+
+```
+
+```{r}
+data<-data%>%
+  mutate(racea=as_factor(RACEA))%>%#When running code check sample size. Try to use raw
+  filter(racea%in%c("White", "Asian Indian", "Filipino", "Chinese"))
+
+
+table1(~as_factor(MORTUCODLD)|racea, data=data%>%filter(MORTSTAT==1))
+
+
+table1(~factor(sex)+factor(Smoking_recode)+AGE+Education_recode+Earnings_recode+Insurance_recode+USBorn_Recode+DIABETICAGE2+Lifespan_Diabetic+factor(BMI_R_Cat)+factor(HYPERTENEV_recode) |racea2, data=data_table1)
 
 ```
 
