@@ -20,6 +20,7 @@ library(ggformula)
 library(ipumsr)
 library(survival)
 library(survminer)
+library(table1)
 ```
 
 ```{r Ben Windows Paths}
@@ -383,6 +384,41 @@ plot(survfit(cox_mod3), xlab="Years",ylab="Proportion Not Dead due to Diabetes",
 
 
 ggforest(cox_mod3, fontsize = 0.5)#Issues displaying interaction term
+
+
+```
+
+
+```{r, table 1}
+data_table1<-data_practice%>%
+  mutate(DIABETICAGE2=ifelse(DIABETICAGE==96, NA, DIABETICAGE))%>%
+  mutate(Lifespan_Diabetic=ifelse(
+    Diabetes_Lifetime=="Diabetic"&MORTSTAT==1,
+    exposure_birth,
+    NA
+  ))%>%
+  mutate(HYPERTENEV_recode=case_when(#Go back and relevel for regression?
+    HYPERTENEV==1~"No",
+    HYPERTENEV==2~"Yes",
+    HYPERTENEV%in%c(7,8,9)~"Unknown",
+    TRUE~NA
+
+  ))
+
+#table1(~ factor(sex) + age + factor(ulcer) + thickness | status, data=melanoma2)
+table1(~factor(sex)+factor(Smoking_recode)+AGE+Education_recode+Earnings_recode+Insurance_recode+USBorn_Recode+DIABETICAGE2+Lifespan_Diabetic+factor(BMI_R_Cat)+factor(HYPERTENEV_recode) |racea2, data=data_table1)
+
+
+```
+
+
+```{r, table 2 Age Standardized Morality}
+data_practice%>%
+  select(racea2, Diabetes_Lifetime, AGE, MORTSTAT)%>%
+  mutate(age_group=casewhen(
+    
+    
+  ))
 
 
 ```
