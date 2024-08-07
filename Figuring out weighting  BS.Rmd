@@ -1,0 +1,276 @@
+---
+title: "Population Weight Testing"
+author: "Ben Szeto"
+date: "2024-08-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r Ben Windows Paths}
+
+
+ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00029.xml")
+
+data1 <- read_ipums_micro(ddi)
+
+ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00027.xml")
+
+data2 <- read_ipums_micro(ddi)
+
+ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00030.xml")
+
+data3 <- read_ipums_micro(ddi)
+
+```
+
+```{r Ben Mac Path}
+
+# ddi <- read_ipums_ddi("/Users/benszeto/Library/CloudStorage/Box-Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00029.xml")
+# 
+# data1 <- read_ipums_micro(ddi)
+# 
+# ddi <- read_ipums_ddi("/Users/benszeto/Library/CloudStorage/Box-Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00027.xml")
+# 
+# data2 <- read_ipums_micro(ddi)
+# 
+# ddi <- read_ipums_ddi("/Users/benszeto/Library/CloudStorage/Box-Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00030.xml")
+# 
+# data3 <- read_ipums_micro(ddi)
+
+
+```
+
+```{r, data merging}
+data1<-data1%>%#Selecting variables of interest from data1
+  select(NHISPID, DIABETICAGE, DIAYRSAGO)
+
+data3<-data3%>%#Selecting variables of interest from data3
+  select(NHISPID, MORTDODY, MORTWT, MORTSTAT)
+
+data<-merge(data1, data2, by="NHISPID")
+data<-merge(data, data3, by="NHISPID")
+
+```
+
+
+```{r, defining exposure time since DOB(This is what we use for expsoreu. underlying time scale cox)}
+data<-data%>%
+  mutate(exposure_birth=ifelse(
+    MORTSTAT==1,
+    MORTDODY-YEAR+AGE,#If dead, time ends at year of death
+    2019-YEAR+AGE#If alive or NIU, time ends at 2019
+    ))
+
+```
+
+```{r, defining exposure time since Diabetes Diagnosis}
+
+data<-data%>%
+  mutate(exposure_diabetes=ifelse(
+    !DIABETICAGE==96 & !MORTDODY==9999,
+    (AGE-DIABETICAGE)+(MORTDODY-YEAR),
+    NA
+  ))
+
+```
+
+```{r, data cleaning}
+data<-data%>%
+  mutate(racea=as_factor(RACEA))%>%
+  mutate(mortstat=as_factor(MORTSTAT))%>%
+  mutate(morthypr=as_factor(MORTHYPR))%>%
+  mutate(sex=as_factor(SEX))%>%
+  filter(racea%in%c("Chinese", "Asian Indian", "White", "Filipino"))%>% #selecting Chinese, Asian Indian, Filipino, and White
+  filter(!BMI==0)%>% #filtering out extraneous BMIs
+  filter(BMI<90)%>%
+  filter(MORTELIG==1)%>%
+  mutate(BMI_R_Cat=ifelse(racea=="White", 
+                          case_when(BMI<18.5~"Underweight",#BMI thresholds for Whites
+                                    BMI>=18.5 & BMI<25~"Normal Weight",
+                                    BMI>=25 & BMI <30~"Overweight",
+                                    BMI>=30~"Obese"),
+                          case_when(BMI<18.5~"Underweight",#BMI thresholds for Asians (Considered all races not White)
+                                    BMI>=18.5 & BMI<23~"Normal Weight",
+                                    BMI>=23 & BMI <27.5~"Overweight",
+                                    BMI>=27.5~"Obese")))#27.5 is obese for Asians
+#mutate(CVD_MOR=ifelse(MORTUCODLD%in%c(1, 5), TRUE, FALSE))%>%
+  
+```
+
+```{r education recoding}
+
+data%>%
+  select(EDUCREC2)%>%
+  mutate(Education=as_factor(EDUCREC2))%>%
+  ggplot()+
+  geom_bar(aes(x=Education))+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+data<-data%>%#recoding education
+  filter(!EDUCREC2==0)%>%
+  mutate(Education_recode=case_when(
+    EDUCREC2%in%c(10,20,30,31,32,40,41)~"Did Not Complete High School",
+    EDUCREC2==42~"High School Grad",
+    EDUCREC2%in%c(50,51,52,53)~"Some College",
+    EDUCREC2==54~"4 years college/Bachelor's degree",
+    EDUCREC2==60~"Post Bachelor",
+    EDUCREC2%in%c(96, 97,98,99)~"Unknown",
+    TRUE~"Check Again"
+  ))
+
+data%>%
+    ggplot()+
+    geom_bar(aes(x=Education_recode, fill=racea), position="dodge")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+```
+
+```{r smoking status recode}
+data%>%
+  ggplot()+
+  geom_bar(aes(x=as_factor(SMOKESTATUS2)))+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+data<-data%>%
+  mutate(Smoking_recode=case_when(
+    SMOKESTATUS2%in%c(10,11,12,13)~"Current Smoker",
+    SMOKESTATUS2%in%c(20,40)~"Former Smoker",
+    SMOKESTATUS2%in%c(30)~"Never Smoked",
+    SMOKESTATUS2==90~"Unknown",
+    TRUE~"Check Code"
+  ))
+
+data%>%
+  ggplot()+
+  geom_bar(aes(x=Smoking_recode))
+
+```
+
+```{r insurance coverage recode}
+data%>%
+  ggplot()+
+  geom_bar(aes(x=as_factor(HINOTCOVE)))
+
+
+data<-data%>%
+  mutate(Insurance_recode=case_when(
+    HINOTCOVE==1~"Covered",
+    HINOTCOVE==2~"Uncovered",
+    HINOTCOVE%in%c(7,8,9)~"Unknown",
+    TRUE~"Check Code"
+    
+  ))
+
+data%>%
+  ggplot()+
+  geom_bar(aes(x=Insurance_recode))+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+```
+
+```{r}
+
+data<-data%>%
+  mutate(USBorn_Recode=case_when(
+         USBORN%in%c(10,11,12)~"Born Outside US",
+         USBORN==20~"Born in US"))%>%
+  mutate(USBorn_Recode=relevel(droplevels(as_factor(USBorn_Recode)), "Born in US"))
+
+data%>%
+  group_by(USBorn_Recode)%>%
+  count()
+
+
+```
+
+```{r}
+data%>%
+  select(EARNINGS)%>%
+  ggplot()+
+  geom_bar(aes(x=as_factor(EARNINGS)))+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+
+data<-data%>%
+  mutate(Earnings_recode=as_factor(case_when(
+    EARNINGS%in%c(0,97,98,99)~"NIU/Unknown",
+    EARNINGS%in%c(1,2,3,4,5,6)~"Low Income ($1-$34,999)",
+    EARNINGS%in%c(7,8,9,10)~"Middle Income($35,000-$74,999)",
+    EARNINGS==11~"High Income(>$75,000)"
+  )))%>%
+  mutate(Earnings_recode=factor(Earnings_recode, levels=c("Low Income ($1-$34,999)", "Middle Income($35,000-$74,999)","High Income(>$75,000)","NIU/Unknown"  )))
+
+data%>%
+  ggplot()+
+  geom_bar(aes(x=Earnings_recode))
+
+# data<-data%>%
+#   filter(!Earnings_recode=="NIU/Unknown")#Sample size goes down significantly when needing income information
+```
+
+
+```{r}
+data<-data%>%
+  mutate(Diab_Und_ACM=ifelse(
+    MORTSTAT==1 & MORTDIAB==2,
+    TRUE,
+    FALSE
+  ))
+
+```
+
+```{r}
+data_practice<-data%>%
+  filter(HISPYN==1)%>%
+  mutate(Diabetes_Lifetime=case_when(
+    DIABETICEV==2|MORTDIAB==2~"Diabetic",
+    DIABETICEV%in%c(0,7,8,9) & MORTDIAB==9~"Unknown/Not in Universe",
+    TRUE~"Non-Diabetic"
+  ))%>%
+  filter(!Diabetes_Lifetime=="Unknown/Not in Universe")%>%
+  mutate(Diabetes_Lifetime=as_factor(Diabetes_Lifetime))%>%
+  mutate(Diabetes_Lifetime=droplevels(Diabetes_Lifetime))%>%
+  mutate(Diabetes_Lifetime=relevel(Diabetes_Lifetime, "Non-Diabetic"))%>%
+  mutate(Diab_ACM=case_when(
+    MORTSTAT==1&Diabetes_Lifetime=="Diabetic"~"Diabetic Death",
+    MORTSTAT==2~"Assumed Alive",
+    TRUE~"Other Death"
+  ))%>%
+  #select(MORTELIG, MORTSTAT, Diabetes_Lifetime, Diab_ACM)%>%
+  mutate(Diab_ACM_binary=ifelse(Diab_ACM=="Diabetic Death", TRUE, FALSE))%>%#Diabetes and dead (not necessisarily underlying cause)
+  mutate(Diab_Und_ACM=ifelse(
+    MORTSTAT==1 & MORTDIAB==2,
+    TRUE,
+    FALSE
+  ))
+
+  
+
+# data_practice%>%
+#   ggplot()+
+#   geom_bar(aes(x=Diab_ACM_binary))
+```
+
+
+```{r}
+data_weighted<-as_survey(data,
+                         id=PSU,
+                         weight=PERWEIGHT,
+                         strata=STRATA,
+                         nest=TRUE)
+
+data_weighted_summary<-data_weighted%>%
+  group_by(racea)%>%
+  dplyr::summarize(
+    mean_age=survey_mean(AGE),
+    pct=survey_mean()
+  )
+
+data_weighted_summary
+
+table1(~mean_age|racea, data=data_weighted_summary)
+```
+

@@ -446,6 +446,58 @@ data_practice%>%
   ))
 
 
+
+
+```
+```{r}
+head(data_practice)
+
+```
+
+```{r, weighting}
+library(srvyr)
+
+
+data_practice_weighted<-as_survey(data_practice,
+     id=PSU,
+     weight=PERWEIGHT,
+     strata=STRATA,
+     nest=TRUE)
+
+
+data_practice_weighted
+```
+
+
+```{r, table 1 with weights}
+# data_table1<-data_practice_weighted%>%
+#   mutate(DIABETICAGE2=ifelse(DIABETICAGE==96, NA, DIABETICAGE))%>%
+#   mutate(Lifespan_Diabetic=ifelse(
+#     Diabetes_Lifetime=="Diabetic"&MORTSTAT==1,
+#     exposure_birth,
+#     NA
+#   ))%>%
+#   mutate(HYPERTENEV_recode=case_when(#Go back and relevel for regression?
+#     HYPERTENEV==1~"No",
+#     HYPERTENEV==2~"Yes",
+#     HYPERTENEV%in%c(7,8,9)~"Unknown",
+#     TRUE~NA
+#   ))%>%
+#   mutate(Education_recode=factor(Education_recode, levels=c("Did Not Complete High School", "High School Grad","Some College", "4 years college/Bachelor's degree", "Post Bachelor", "Unknown")))%>%
+#   mutate(BMI_R_Cat=factor(BMI_R_Cat, levels=c("Underweight", "Normal Weight","Overweight", "Obese")))#Reordering levels
+# 
+# 
+# table1_sum<-data_practice_weighted%>%
+#   group_by(racea2) %>%
+#   summarise(
+#     proportion_female = survey_prop(sex == "Female"),
+#     mean_age = survey_mean(Age)
+#   )
+# 
+# table1(~proportion_female+ mean_age, data=table1_sum)
+# 
+# table1(~factor(sex)+factor(Smoking_recode)+AGE+Education_recode+Earnings_recode+Insurance_recode+USBorn_Recode+DIABETICAGE2+Lifespan_Diabetic+factor(BMI_R_Cat)+factor(HYPERTENEV_recode)+Mortality_Status |racea2, data=data_table1)
+
 ```
 
 
