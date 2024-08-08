@@ -9,6 +9,20 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+```{r, loading libraries}
+library(tidyverse)
+library(knitr)
+library(plotly)
+library(ggeffects)
+library(ggformula)
+library(ipumsr)
+library(survival)
+library(survminer)
+library(table1)
+library(srvyr)
+
+```
+
 ```{r Ben Windows Paths}
 
 
@@ -245,7 +259,9 @@ data_practice<-data%>%
     MORTSTAT==1 & MORTDIAB==2,
     TRUE,
     FALSE
-  ))
+  ))%>%
+  mutate(Mort_recode=ifelse(MORTSTAT==1, TRUE, FALSE))%>%
+  mutate(Mortality_Status=ifelse(MORTSTAT==1, "Presummed Dead", "Presummed Alive"))
 
   
 
@@ -256,7 +272,12 @@ data_practice<-data%>%
 
 
 ```{r}
-data_weighted<-as_survey(data,
+
+summary(data_practice)
+
+data_practice%>%
+  select()
+data_weighted<-as_survey(data_practice,
                          id=PSU,
                          weight=PERWEIGHT,
                          strata=STRATA,
@@ -266,11 +287,50 @@ data_weighted_summary<-data_weighted%>%
   group_by(racea)%>%
   dplyr::summarize(
     mean_age=survey_mean(AGE),
+    prop_female=survey_prop(sex=="Female"),
     pct=survey_mean()
   )
 
 data_weighted_summary
 
 table1(~mean_age|racea, data=data_weighted_summary)
+
+data_weighted_summary
+
+data_weighted<-as_survey(data,
+                         id=PSU,
+                         weight=PERWEIGHT,
+                         strata=STRATA,
+                         nest=TRUE)
+
+data_weighted_summary<-data_weighted%>%
+  survey::svyby(~AGE + sex,by = ~racea,svymean,vartype="se")
+
+data_weighted_summary <- svyby(~AGE + sex, by = ~racea, design = data_weighted, svymean, vartype = "se")
+
+table1(~mean_age+sex|racea, data=data_weighted_summary)
+```
+```{r}
+data_weighted%>%
+  group_by(racea, sex)%>%
+  dplyr::summarize(
+    pct=survey_mean()
+  )
+
+
+
 ```
 
+cite package source: https://www.jstatsoft.org/article/view/v084i02
+
+https://r-survey.r-forge.r-project.org/survey/html/svycoxph.html
+
+```{r, weight cox}
+library(survey)
+cox_mod3<-svycoxph(Surv(exposure_birth, Mort_recode) ~ racea+sex, design = data_weighted)
+
+
+cox_summary<-summary(cox_mod3)
+cox_summary
+
+```

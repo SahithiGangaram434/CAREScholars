@@ -234,7 +234,7 @@ data<-data%>%
 
 ```{r}
 data_practice<-data%>%
-  filter(HISPYN==1)%>%
+  filter(!(HISPYN==2 & racea=="White"))%>%
   mutate(Diabetes_Lifetime=case_when(
     DIABETICEV==2|MORTDIAB==2~"Diabetic",
     DIABETICEV%in%c(0,7,8,9) & MORTDIAB==9~"Unknown/Not in Universe",
@@ -256,7 +256,6 @@ data_practice<-data%>%
     TRUE,
     FALSE
   ))
-
   
 
 # data_practice%>%
@@ -309,6 +308,12 @@ coxcoefficients[!is.na(coxcoefficients[,1]),] #removing empty coefficients
 read: <https://socialsciences.mcmaster.ca/jfox/Books/Companion/appendices/Appendix-Cox-Regression.pdf>
 
 ```{r, cox model 2: Diabetes specific mortality}
+
+
+data_practice%>%
+  select(racea)
+
+
 data_practice<-data_practice%>%
   mutate(sex=as_factor(SEX))%>%#removing extraneous levels
   mutate(sex=relevel(droplevels(sex), "Male"))%>%
@@ -327,9 +332,9 @@ cox_summary
 # coxcoefficients[!is.na(coxcoefficients[,1]),] #removing empty coefficients
 
 
-plot(survfit(cox_mod2), xlab="Years",ylab="Proportion Not Dead due to Diabetes", ylim=c(0.85,1))
+plot(survfit(cox_mod2), xlab="Years",ylab="Proportion Not Dead due to Diabetes", ylim=c(0.85,1), xlim=c(40,110), col=1:4)
 
-
+legend("bottomleft", legend=levels(data_practice$racea2), col=1:4, lty=1)
 
 #ggforest(cox_mod2, fontsize = 0.5)
 
@@ -355,6 +360,12 @@ cox_summary
 
 ggforest(cox_mod3, fontsize = 0.5)#Issues displaying interaction term
 
+
+cox_mod3<-coxph(Surv(exposure_birth, Mort_recode) ~ strata(racea2) + sex + Diabetes_Lifetime:racea2+ BMI_R_Cat+Education_recode+Earnings_recode+Smoking_recode+Insurance_recode+USBorn_Recode, data = data_practice)
+
+plot(survfit(cox_mod2), xlab="Years",ylab="Proportion Alive", ylim=c(0.85,1), xlim=c(40,110), col=1:4)
+
+legend("bottomleft", legend=levels(data_practice$racea2), col=1:4, lty=1)
 ```
 
 
@@ -385,8 +396,7 @@ cox_summary
 
 
 
-
-forrest_plot3<-ggforest(cox_mod3, fontsize = 1)#Issues displaying interaction term
+forrest_plot3<-ggforest(cox_mod3, fontsize = 1)
 
 
 library(grDevices)
@@ -404,6 +414,59 @@ cox_mod3<-coxph(Surv(exposure_birth, Mort_recode) ~ strata(racea2) + sex + Diabe
 
 plot(survfit(cox_mod3), xlab="Years",ylab="Proportion Alive", ylim=c(0.3,1), xlim=c(40,90))
 
+```
+
+
+```{r}
+data_practice_diabetic<-data_practice%>%
+  filter(Diabetes_Lifetime=="Diabetic")
+
+cox_mod3<-coxph(Surv(exposure_birth, Mort_recode) ~ racea2 + sex + BMI_R_Cat+Education_recode+Earnings_recode+Smoking_recode+Insurance_recode+USBorn_Recode, data = data_practice_diabetic)
+
+
+cox_summary<-summary(cox_mod3)
+cox_summary
+
+
+
+
+forrest_plot3<-ggforest(cox_mod3, fontsize = 1)#Issues displaying interaction term
+
+
+
+library(grDevices)
+png(file="forestplot_mod4_diabetes.png", width=1024, height=1024)
+forrest_plot3
+
+
+data_practice<-data_practice%>%#manually making the interaction term
+  mutate(Diabetes_Over_Race=as_factor(ifelse(
+    Diabetes_Lifetime=="Diabetic",
+    case_when(
+      racea2=="White"~"White Diabetic",
+      racea2=="Asian Indian"~"Asian Indian Diabetic",
+      racea2=="Filipino" ~"Filipino Diabetic",
+      racea2=="Chinese"~"Chinese Diabetic",
+      TRUE~"Check Code"),
+    case_when(
+      racea2=="White"~"White Non-diabetic",
+      racea2=="Asian Indian"~"Asian Indian Non-diabetic",
+      racea2=="Filipino" ~"Filipino Non-diabetic",
+      racea2=="Chinese"~"Chinese Non-diabetic",
+      TRUE~"Check Code")
+  )))%>%
+  mutate(Diabetes_Over_Race=factor(Diabetes_Over_Race, c("White Non-diabetic","Asian Indian Non-diabetic", "Filipino Non-diabetic", "Chinese Non-diabetic","White Diabetic",  "Asian Indian Diabetic", "Filipino Diabetic", "Chinese Diabetic" )))
+
+
+
+cox_mod3<-coxph(Surv(exposure_birth, Mort_recode) ~ strata(Diabetes_Over_Race) + sex+ BMI_R_Cat+Education_recode+Earnings_recode+Smoking_recode+Insurance_recode+USBorn_Recode, data = data_practice)
+
+
+
+
+plot(survfit(cox_mod3), xlab="Years",ylab="Proportion Alive", ylim=c(0,1), xlim=c(30,110), col=1:4, lty=c(1,1,1,1,2,2,2,2))
+
+legend("bottomleft", legend=levels(data_practice$Diabetes_Over_Race), col=1:4, lty=c(1,1,1,1,2,2,2,2))
 ```
 
 ```{r}
@@ -449,12 +512,12 @@ table1(~factor(sex)+factor(Smoking_recode)+AGE+Education_recode+Earnings_recode+
 
 
 ```{r, table 2 Age Standardized Morality}
-data_practice%>%
-  select(racea2, Diabetes_Lifetime, AGE, MORTSTAT)%>%
-  mutate(age_group=casewhen(
-    
-    
-  ))
+# data_practice%>%
+#   select(racea2, Diabetes_Lifetime, AGE, MORTSTAT)%>%
+#   mutate(age_group=casewhen(
+#     
+#     
+#   ))
 
 
 
