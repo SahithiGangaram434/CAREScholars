@@ -317,20 +317,84 @@ data_weighted%>%
     pct=survey_mean()
   )
 
-
+data_weighted%>%
+  
 
 ```
+
+
+
 
 cite package source: https://www.jstatsoft.org/article/view/v084i02
 
 https://r-survey.r-forge.r-project.org/survey/html/svycoxph.html
 
 ```{r, weight cox}
+data_weighted<-svydesign(id=~PSU,
+          weights=~PERWEIGHT,
+          strata=~racea2,
+          nest=TRUE,
+          survey.lonely.psu="adjust",
+          data=data_practice)
+
+
 library(survey)
 cox_mod3<-svycoxph(Surv(exposure_birth, Mort_recode) ~ racea+sex, design = data_weighted)
 
 
-cox_summary<-summary(cox_mod3)
-cox_summary
+cox_mod3<-svycoxph(Surv(AGE, exposure_birth, Mort_recode) ~YEAR+Education_recode+racea2+Insurance_recode , design = data_weighted, na.action=na.omit)
+
+
+summary(cox_mod3)
+ggforest(cox_mod3, fontsize = 1)#this isnt working for some reason?
+
+cox_mod3<-coxph(Surv(AGE, exposure_birth, Mort_recode) ~ YEAR, data = data_practice)#non weighted version
+
+
+ggforest(cox_mod3, fontsize = 1)
+```
+
+
+
+
+
+
+```{r}
+data_weighted<-as_survey(data_practice,#I dont understand the difference between as_survey and the other function
+                         id=PSU,
+                         weight=PERWEIGHT,
+                         strata=STRATA,
+                         nest=TRUE)
+data_weighted%>%
+  group_by(racea2, sex)%>%
+  summarize(
+    survey_mean()
+  )
+
+
+table_1_function_quant<-function(dataset, variable){
+  
+  variable_string_name <- deparse(substitute(variable))
+  column_name<- paste(variable_string_name, "_point_int")
+  
+  dataset%>%
+  group_by(racea2,{{variable}}) %>%
+  summarize(
+    survey_mean()
+  )%>%
+  mutate(coef=coef*100)%>%
+  mutate(`_se`=`_se`*100)%>%
+  mutate(t_val=1.96)%>%
+  mutate(lower_bound=coef-t_val*`_se`)%>%
+  mutate(upper_bound=coef+t_val*`_se`)%>%
+  mutate(!!column_name :=  paste0(round(coef, 2), ", (", round(lower_bound, 2), "-", round(upper_bound, 2), ")")) %>%
+    select(racea2,!!column_name)
+  #Maybe try to rotate
+}
+
+
+table_1_function_quant(data_weighted, sex)
+
 
 ```
+
