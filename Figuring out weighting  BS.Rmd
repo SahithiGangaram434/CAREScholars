@@ -26,33 +26,33 @@ library(srvyr)
 ```{r Ben Windows Paths}
 
 
-ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00029.xml")
-
-data1 <- read_ipums_micro(ddi)
-
-ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00027.xml")
-
-data2 <- read_ipums_micro(ddi)
-
-ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00030.xml")
-
-data3 <- read_ipums_micro(ddi)
+# ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00029.xml")
+# 
+# data1 <- read_ipums_micro(ddi)
+# 
+# ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00027.xml")
+# 
+# data2 <- read_ipums_micro(ddi)
+# 
+# ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00030.xml")
+# 
+# data3 <- read_ipums_micro(ddi)
 
 ```
 
 ```{r Ben Mac Path}
 
-# ddi <- read_ipums_ddi("/Users/benszeto/Library/CloudStorage/Box-Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00029.xml")
-# 
-# data1 <- read_ipums_micro(ddi)
-# 
-# ddi <- read_ipums_ddi("/Users/benszeto/Library/CloudStorage/Box-Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00027.xml")
-# 
-# data2 <- read_ipums_micro(ddi)
-# 
-# ddi <- read_ipums_ddi("/Users/benszeto/Library/CloudStorage/Box-Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00030.xml")
-# 
-# data3 <- read_ipums_micro(ddi)
+ddi <- read_ipums_ddi("/Users/benszeto/Library/CloudStorage/Box-Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00029.xml")
+
+data1 <- read_ipums_micro(ddi)
+
+ddi <- read_ipums_ddi("/Users/benszeto/Library/CloudStorage/Box-Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00027.xml")
+
+data2 <- read_ipums_micro(ddi)
+
+ddi <- read_ipums_ddi("/Users/benszeto/Library/CloudStorage/Box-Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00030.xml")
+
+data3 <- read_ipums_micro(ddi)
 
 
 ```
@@ -265,6 +265,12 @@ data_practice<-data%>%
 
   
 
+data_practice<-data_practice%>%
+  mutate(sex=as_factor(SEX))%>%#removing extraneous levels
+  mutate(sex=relevel(droplevels(sex), "Male"))%>%
+  mutate(racea2=droplevels(racea))%>%
+  mutate(racea2=relevel(racea2, "White"))%>%
+  mutate(Smoking_recode=relevel(as_factor(Smoking_recode), "Never Smoked"))
 # data_practice%>%
 #   ggplot()+
 #   geom_bar(aes(x=Diab_ACM_binary))
@@ -396,5 +402,27 @@ table_1_function_quant<-function(dataset, variable){
 table_1_function_quant(data_weighted, sex)
 
 
+```
+
+
+```{r, making dummy variables for table1}
+library(fastDummies)
+
+
+data_practice%>%
+  select(racea2)
+
+data_weighted%>%
+  select(racea2, Education_recode)%>%
+  dummy_cols(select_columns = "Education_recode")%>%
+  lapply(table_1_function_quant)
+
+
+data_weighted%>%
+  select(racea2, sex)%>%
+  table_1_function_quant(sex)
+
+
+table()
 ```
 
