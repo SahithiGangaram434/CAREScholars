@@ -1,0 +1,104 @@
+--title: "Tables"
+author: "Ben Szeto"
+date: "2024-08-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(table1)
+```
+
+```{r, unweighted table}
+
+  
+table1(~sex+Smoking_recode+AGE+Education_recode+Earnings_recode+Insurance_Status+USBorn_Recode+Age_Diabetes_Diagnosis+Lifespan_Diabetic+BMI_R_Cat+HYPERTENEV_recode+Mortality_Status+Diabetes_Lifetime |Race, data=data)
+
+```
+
+```{r, function for weighted}
+
+
+table_1_weight_cat<-function(dataset, variable){
+  
+  variable_string_name <- deparse(substitute(variable))
+  column_name<- paste(variable_string_name, "_point_int")
+  
+  dataset%>%
+  group_by(Race,{{variable}}) %>%
+  summarize(
+    survey_mean()
+  )%>%
+  mutate(coef=coef*100)%>%
+  mutate(`_se`=`_se`*100)%>%
+  mutate(t_val=1.96)%>%#Using a fixed t-value of 1.96
+  mutate(lower_bound=coef-t_val*`_se`)%>%
+  mutate(upper_bound=coef+t_val*`_se`)%>%
+  mutate(!!column_name :=  paste0(round(coef, 1), ", (", round(lower_bound, 1), "-", round(upper_bound, 1), ")")) %>%
+    select(Race,!!column_name)
+  #Maybe try to rotate
+}
+
+
+
+table_1_weight_quant<-function(dataset, variable){
+  
+  variable_string_name <- deparse(substitute(variable))
+  column_name<- paste(variable_string_name, "_point_int")
+  
+  dataset%>%
+  group_by(Race) %>%
+  summarize(
+    survey_mean({{variable}})
+  )%>%
+  mutate(t_val=1.96)%>%#Using a fixed t-value of 1.96
+  mutate(lower_bound=coef-t_val*`_se`)%>%
+  mutate(upper_bound=coef+t_val*`_se`)%>%
+  mutate(!!column_name :=  paste0(round(coef, 1), ", (", round(lower_bound, 1), "-", round(upper_bound, 1), ")")) %>%
+    select(Race,!!column_name)
+  #Maybe try to rotate
+}
+
+
+```
+
+
+```{r, categorical variables}
+
+table_1_weight_cat(data_weighted_survey, Education_recode)
+table_1_weight_cat(data_weighted_survey, sex)
+table_1_weight_cat(data_weighted_survey, Earnings_recode)
+table_1_weight_cat(data_weighted_survey, Insurance_Status)
+table_1_weight_cat(data_weighted_survey, USBorn_Recode)
+table_1_weight_cat(data_weighted_survey, BMI_R_Cat)
+table_1_weight_cat(data_weighted_survey, HYPERTENEV_recode) #This isnt working for some reason
+table_1_weight_cat(data_weighted_survey, Mortality_Status)
+
+table_1_weight_cat(data_weighted_survey, Smoking_recode)
+table_1_weight_cat(data_weighted_survey, Smoking)
+table_1_weight_cat(data_weighted_survey, Diabetes_Lifetime)
+table_1_weight_cat(data_weighted_survey, DIABETICEV)
+
+```
+
+```{r, quant variables}
+
+table_1_weight_quant(data_weighted_survey, AGE)
+
+```
+
+
+```{r}
+data%>%
+  filter(Mort_recode==TRUE)%>%
+  group_by(Race, Diabetes_Lifetime)%>%
+  summarize(
+    mean(exposure_birth),
+    sd(exposure_birth)
+  )
+
+```
+

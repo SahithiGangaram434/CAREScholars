@@ -20,39 +20,39 @@ library(survival)
 library(survminer)
 library(table1)
 library(srvyr)
-
+library(survey)
 ```
 
 ```{r Ben Windows Paths}
 
 
-# ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00029.xml")
-# 
-# data1 <- read_ipums_micro(ddi)
-# 
-# ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00027.xml")
-# 
-# data2 <- read_ipums_micro(ddi)
-# 
-# ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00030.xml")
-# 
-# data3 <- read_ipums_micro(ddi)
+ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00029.xml")
+
+data1 <- read_ipums_micro(ddi)
+
+ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00027.xml")
+
+data2 <- read_ipums_micro(ddi)
+
+ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00030.xml")
+
+data3 <- read_ipums_micro(ddi)
 
 ```
 
 ```{r Ben Mac Path}
 
-ddi <- read_ipums_ddi("/Users/benszeto/Library/CloudStorage/Box-Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00029.xml")
-
-data1 <- read_ipums_micro(ddi)
-
-ddi <- read_ipums_ddi("/Users/benszeto/Library/CloudStorage/Box-Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00027.xml")
-
-data2 <- read_ipums_micro(ddi)
-
-ddi <- read_ipums_ddi("/Users/benszeto/Library/CloudStorage/Box-Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00030.xml")
-
-data3 <- read_ipums_micro(ddi)
+# ddi <- read_ipums_ddi("/Users/benszeto/Library/CloudStorage/Box-Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00029.xml")
+# 
+# data1 <- read_ipums_micro(ddi)
+# 
+# ddi <- read_ipums_ddi("/Users/benszeto/Library/CloudStorage/Box-Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00027.xml")
+# 
+# data2 <- read_ipums_micro(ddi)
+# 
+# ddi <- read_ipums_ddi("/Users/benszeto/Library/CloudStorage/Box-Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00030.xml")
+# 
+# data3 <- read_ipums_micro(ddi)
 
 
 ```
@@ -336,9 +336,9 @@ cite package source: https://www.jstatsoft.org/article/view/v084i02
 https://r-survey.r-forge.r-project.org/survey/html/svycoxph.html
 
 ```{r, weight cox}
-data_weighted<-svydesign(id=~PSU,
+data_weighted<-survey::svydesign(id=~PSU,
           weights=~PERWEIGHT,
-          strata=~racea2,
+          #strata=~racea2,
           nest=TRUE,
           survey.lonely.psu="adjust",
           data=data_practice)
@@ -348,13 +348,13 @@ library(survey)
 cox_mod3<-svycoxph(Surv(exposure_birth, Mort_recode) ~ racea+sex, design = data_weighted)
 
 
-cox_mod3<-svycoxph(Surv(AGE, exposure_birth, Mort_recode) ~YEAR+Education_recode+racea2+Insurance_recode , design = data_weighted, na.action=na.omit)
+cox_mod3<-svycoxph(Surv(AGE, exposure_birth, Mort_recode) ~YEAR+racea2 , design = data_weighted, na.action=na.omit)
 
 
 summary(cox_mod3)
 ggforest(cox_mod3, fontsize = 1)#this isnt working for some reason?
 
-cox_mod3<-coxph(Surv(AGE, exposure_birth, Mort_recode) ~ YEAR, data = data_practice)#non weighted version
+cox_mod3<-coxph(Surv(AGE, exposure_birth, Mort_recode) ~ YEAR+racea2, data = data_practice)#non weighted version
 
 
 ggforest(cox_mod3, fontsize = 1)
@@ -369,7 +369,7 @@ ggforest(cox_mod3, fontsize = 1)
 data_weighted<-as_survey(data_practice,#I dont understand the difference between as_survey and the other function
                          id=PSU,
                          weight=PERWEIGHT,
-                         strata=STRATA,
+                         #strata=STRATA,
                          nest=TRUE)
 data_weighted%>%
   group_by(racea2, sex)%>%
@@ -417,12 +417,21 @@ data_weighted%>%
   dummy_cols(select_columns = "Education_recode")%>%
   lapply(table_1_function_quant)
 
+table_1_function_quant(data_weighted,Education_recode )
 
-data_weighted%>%
-  select(racea2, sex)%>%
-  table_1_function_quant(sex)
+# 
+# data_weighted%>%
+#   select(racea2, sex)%>%
+#   table_1_function_quant(sex)
+
+unique(data_practice$Education_recode)
 
 
-table()
+
+data_practice%>%
+  group_by(racea2, Education_recode)%>%
+  summarize(
+    n()
+  )
 ```
 

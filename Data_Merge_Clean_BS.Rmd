@@ -1,0 +1,209 @@
+---
+title: "Data_Cleaning_BS"
+author: "Ben Szeto"
+date: "2024-08-09"
+output: html_document
+---
+
+```{r, libraries}
+
+library(tidyverse)
+library(ipumsr)
+library(survey)
+library(srvyr)
+```
+
+
+```{r Ben Windows Paths}
+
+
+ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00029.xml")
+
+data1 <- read_ipums_micro(ddi)
+
+ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00027.xml")
+
+data2 <- read_ipums_micro(ddi)
+
+ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00030.xml")
+
+data3 <- read_ipums_micro(ddi)
+
+```
+
+
+```{r Ben Mac Path}
+
+# ddi <- read_ipums_ddi("/Users/benszeto/Library/CloudStorage/Box-Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00029.xml")
+# 
+# data1 <- read_ipums_micro(ddi)
+# 
+# ddi <- read_ipums_ddi("/Users/benszeto/Library/CloudStorage/Box-Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00027.xml")
+# 
+# data2 <- read_ipums_micro(ddi)
+# 
+# ddi <- read_ipums_ddi("/Users/benszeto/Library/CloudStorage/Box-Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00030.xml")
+# 
+# data3 <- read_ipums_micro(ddi)
+
+
+```
+
+
+```{r, data merging}
+data1<-data1%>%#Selecting variables of interest from data1
+  select(NHISPID, DIABETICAGE, DIAYRSAGO)
+
+data3<-data3%>%#Selecting variables of interest from data3
+  select(NHISPID, MORTDODY, MORTWT, MORTSTAT)
+
+data<-merge(data1, data2, by="NHISPID")
+data<-merge(data, data3, by="NHISPID")
+
+```
+
+
+```{r}
+
+data<-data%>%
+  mutate(Race=as_factor(RACEA))%>%#RACEA to Race
+  mutate(mortstat=as_factor(MORTSTAT))%>%
+  mutate(morthypr=as_factor(MORTHYPR))%>%
+  mutate(sex=as_factor(SEX))%>%
+  mutate(BMI_R_Cat=ifelse(Race=="White", #Creating BMI Categorizations
+                          case_when(BMI<18.5~"Underweight",#BMI thresholds for Whites
+                                    BMI>=18.5 & BMI<25~"Normal Weight",
+                                    BMI>=25 & BMI <30~"Overweight",
+                                    BMI>=30~"Obese"),
+                          case_when(BMI<18.5~"Underweight",#BMI thresholds for Asians (Considered all races not White)
+                                    BMI>=18.5 & BMI<23~"Normal Weight",
+                                    BMI>=23 & BMI <27.5~"Overweight",
+                                    BMI>=27.5~"Obese")))%>%#27.5 is obese for Asians
+  mutate(Education_recode=case_when(#Education recoding
+    EDUCREC2%in%c(10,20,30,31,32,40,41)~"Did Not Complete High School",
+    EDUCREC2==42~"High School Grad",
+    EDUCREC2%in%c(50,51,52,53)~"Some College",
+    EDUCREC2==54~"4 years college/Bachelor's degree",
+    EDUCREC2==60~"Post Bachelor",
+    EDUCREC2%in%c(96, 97,98,99)~"Unknown",
+    EDUCREC2==0~"NIU", 
+    TRUE~"Check Again"
+  ))%>%
+  mutate(Smoking_recode=case_when(
+    SMOKESTATUS2%in%c(10,11,12,13)~"Current Smoker",
+    SMOKESTATUS2%in%c(20,40)~"Former Smoker",
+    SMOKESTATUS2%in%c(30)~"Never Smoked",
+    SMOKESTATUS2==90~"Unknown",
+    TRUE~"Check Code"
+  ))%>%
+  mutate(Insurance_Status=case_when(
+    HINOTCOVE==1~"Covered",
+    HINOTCOVE==2~"Uncovered",
+    HINOTCOVE%in%c(7,8,9)~"Unknown",
+    TRUE~"Check Code"
+  ))%>%
+  mutate(USBorn_Recode=case_when(
+         USBORN%in%c(10,11,12)~"Born Outside US",
+         USBORN==20~"Born in US"))%>%
+  # move to factoring part of code mutate(USBorn_Recode=relevel(droplevels(as_factor(USBorn_Recode)), "Born in US"))
+  mutate(Earnings_recode=as_factor(case_when(
+    EARNINGS%in%c(0,97,98,99)~"NIU/Unknown",
+    EARNINGS%in%c(1,2,3,4,5,6)~"Low Income ($1-$34,999)",
+    EARNINGS%in%c(7,8,9,10)~"Middle Income($35,000-$74,999)",
+    EARNINGS==11~"High Income(>$75,000)"
+  )))%>%
+  # Move down to facotring part mutate(Earnings_recode=factor(Earnings_recode, levels=c("Low Income ($1-$34,999)", "Middle Income($35,000-$74,999)","High Income(>$75,000)","NIU/Unknown"  )))%>%
+  mutate(Diabetes_Lifetime=case_when(
+    DIABETICEV==2|MORTDIAB==2~"Diabetic",
+    DIABETICEV%in%c(0,7,8,9) & MORTDIAB==9~"Unknown/Not in Universe",
+    TRUE~"Non-Diabetic"
+  ))%>%
+  mutate(Mort_recode=ifelse(MORTSTAT==1, TRUE, FALSE))%>%
+  mutate(Mortality_Status=ifelse(MORTSTAT==1, "Presummed Dead", "Presummed Alive"))%>%#manually making the interaction term
+  mutate(Diabetes_Lifetime_Race=as_factor(ifelse(
+    Diabetes_Lifetime=="Diabetic",
+    case_when(
+      Race=="White"~"White Diabetic",
+      Race=="Asian Indian"~"Asian Indian Diabetic",
+      Race=="Filipino" ~"Filipino Diabetic",
+      Race=="Chinese"~"Chinese Diabetic",
+      TRUE~"Check Code"),
+    "Non-Diabetic"
+  )))%>%
+  mutate(HYPERTENEV_recode=case_when(#Go back and relevel for regression?
+    HYPERTENEV==1~"No",
+    HYPERTENEV==2~"Yes",
+    HYPERTENEV%in%c(7,8,9)~"Unknown",
+    TRUE~NA
+  ))%>%
+  mutate(exposure_birth=ifelse(
+    MORTSTAT==1,
+    MORTDODY-YEAR+AGE,#If dead, time ends at year of death
+    2019-YEAR+AGE#If alive or NIU, time ends at 2019
+    ))%>%
+  mutate(Lifespan_Diabetic=ifelse(
+    Diabetes_Lifetime=="Diabetic"&MORTSTAT==1,
+    exposure_birth,
+    NA
+  ))%>%
+  mutate(Age_Diabetes_Diagnosis=ifelse(DIABETICAGE==96, NA, DIABETICAGE))
+
+```
+
+
+```{r, leveling}
+data<-data%>%
+  mutate(Race=factor(droplevels(Race), c("White", "Chinese", "Filipino", "Asian Indian")))%>%
+  mutate(Education_recode=factor(Education_recode, levels=c("High School Grad", "Did Not Complete High School","Some College", "4 years college/Bachelor's degree", "Post Bachelor", "Unknown")))%>%
+  mutate(Smoking_recode=factor(Smoking_recode, c("Never Smoked", "Current Smoker", "Former Smoker", "Unknown")))%>%
+  mutate(Insurance_Status=factor(Insurance_Status, c("Covered", "Uncovered", "Unknown")))%>%
+  mutate(Earnings_recode=factor(Earnings_recode, c("Low Income ($1-$34,999)", "Middle Income($35,000-$74,999)","High Income(>$75,000)", "NIU/Unknown")))%>%
+  mutate(sex=factor(droplevels(sex), c("Male", "Female")))%>%
+  mutate(Diabetes_Lifetime_Race=factor(Diabetes_Lifetime_Race, c("Non-Diabetic","White Diabetic", "Chinese Diabetic", "Filipino Diabetic","Asian Indian Diabetic")))%>%
+  mutate(Diabetes_Lifetime=factor(Diabetes_Lifetime, c("Non-Diabetic", "Diabetic")))
+  
+  
+
+levels(data$Race)
+levels(data$Education_recode)
+levels(data$Smoking_recode)
+levels(data$Insurance_Status)
+```
+
+```{r, data filtering}
+data<-data%>%
+  filter(Race%in%c("Chinese", "Asian Indian", "White", "Filipino"))%>% #selecting Chinese, Asian Indian, Filipino, and White
+  filter(!BMI==0)%>% #filtering out extraneous BMIs
+  filter(BMI<90)%>%
+  filter(MORTELIG==1)%>%#Make sure part of mortality data set
+  filter(!(HISPYN==2 & Race=="White"))#Removing NHW
+```
+
+
+```{r, data weighting}
+
+#Article comparing srvyr and survey: https://cran.r-project.org/web/packages/srvyr/vignettes/srvyr-vs-survey.html
+
+data_weighted_survey<-as_survey(data,
+                         id=PSU,
+                         weight=PERWEIGHT,
+                         strata=STRATA,
+                         nest=TRUE)
+
+
+data_weighted_svyr<-svydesign(id=~PSU,
+          weights=~PERWEIGHT,
+          strata=~STRATA,
+          nest=TRUE,
+          survey.lonely.psu="adjust",
+          data=data)
+
+```
+
+```{r}
+data%>%
+  select(AGE, YEAR, MORTDODY,exposure_birth, Mort_recode, MORTSTAT)%>%
+  mutate(MORTSTAT=as_factor(MORTSTAT))
+
+```
+

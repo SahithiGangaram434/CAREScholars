@@ -1,0 +1,498 @@
+---
+title: "Cox Regressions"
+author: "Ben Szeto"
+date: "2024-08-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(srvyr)
+library(survey)
+library(tidyverse)
+library(survminer)
+```
+
+```{r}
+levels(data$Education_recode)
+
+```
+
+```{r, unweighted cox}
+data_2<-data%>%
+  # filter(!EDUCREC2==0)%>%#Ask the group about this. The results change when removing missing values
+  # filter(!Earnings_recode=="NIU/Unknown")%>%
+  select(exposure_birth, Mort_recode, Race, AGE, sex, Diabetes_Lifetime_Race, Diabetes_Lifetime, BMI_R_Cat, Education_recode, Earnings_recode, Smoking_recode, Insurance_Status, USBorn_Recode, PERWEIGHT, PSU, STRATA)%>%
+  mutate(study_exposure=exposure_birth-AGE)%>%
+  filter(!study_exposure==0)%>%
+  na.omit()
+
+table(data_2$Race)
+
+cox_unweighted<-coxph(Surv(AGE, exposure_birth, Mort_recode) ~ Race + sex + AGE+ Diabetes_Lifetime_Race+ BMI_R_Cat+Education_recode+Earnings_recode+Smoking_recode+Insurance_Status+USBorn_Recode, data = data_2)#Maybe fix the AGE variable and set the age at a single point in time
+
+
+summary(cox_unweighted)
+
+ggforest(cox_unweighted, fontsize = 0.5)
+```
+
+```{r, creating surivival curves}
+#Kaplan M Curve Diabetic
+data_2diabetes<-data_2%>%
+  filter(Diabetes_Lifetime=="Non-Diabetic")
+cox_unweighted_diabetic<-coxph(Surv(AGE, exposure_birth, Mort_recode) ~ strata(Race) + sex + AGE+ BMI_R_Cat+Education_recode+Earnings_recode+Smoking_recode+Insurance_Status+USBorn_Recode, data = data_2diabetes)
+
+plot(survfit(cox_unweighted_diabetic), col=1:4)
+legend("bottomleft", legend=levels(data_2diabetes$Race), col=1:4, lty=1)
+
+
+
+
+#Kaplan M Curve Diabetic vs non-Diabetic
+
+cox_unweighted_diabetic<-coxph(Surv(AGE, exposure_birth, Mort_recode) ~ Race + sex + AGE+strata(Diabetes_Lifetime)+ BMI_R_Cat+Education_recode+Earnings_recode+Smoking_recode+Insurance_Status+USBorn_Recode, data = data_2)
+
+plot(survfit(cox_unweighted_diabetic), col=1:2)
+legend("bottomleft", legend=levels(data_2$Diabetes_Lifetime), col=1:2, lty=1)
+
+```
+
+```{r}
+table(data$ Diabetes_Lifetime_Race)
+
+levels(data$ Diabetes_Lifetime_Race)
+
+```
+
+```{r, weighted cox}
+
+data_weighted<-survey::svydesign(id=~PSU,
+          weights=~PERWEIGHT,
+          strata=~STRATA,
+          nest=TRUE,
+          survey.lonely.psu="adjust",
+          data=data_2)
+
+cox_mod3<-svycoxph(Surv(AGE,exposure_birth, Mort_recode==TRUE) ~ Race + Diabetes_Lifetime_Race+ sex+ BMI_R_Cat+Education_recode+Earnings_recode+Smoking_recode+Insurance_Status+USBorn_Recode, design = data_weighted)
+
+
+summary(cox_mod3)
+
+
+ggforest(cox_mod3,data=data_2)
+
+
+
+
+cox_mod3<-svycoxph(Surv(AGE, Mort_recode) ~ Race , design = data_weighted)
+
+
+summary(cox_mod3)
+```
+
+```{r, manual forest}
+
+#REVIEW THIS STUFF AND FIX. PROBABLY TALK TO SADAF
+coefs <- coef(summary(cox_mod3))
+hr <- exp(coefs[, "coef"])
+# lower_ci<-coefs[, "lower .95"]
+# upper_ci<-coefs[, "upper .95"]
+
+lower_ci<-exp(coefs[, "coef"]-coefs[, "se(coef)"])
+upper_ci<-exp(coefs[, "coef"]+coefs[, "se(coef)"])
+
+plot_data <- data.frame(
+  Variable = rownames(coefs),
+  point = hr,
+  Lower_Bound = lower_ci,
+  Upper_Bound = upper_ci
+)
+
+cox_mod3
+plot_data
+
+ggplot(plot_data,aes(x =Variable,y=point)) +
+  geom_point(size=1)+
+  geom_errorbar(aes(ymin =Lower_Bound, ymax=Upper_Bound), width=0.3) +
+  scale_y_log10()+
+  coord_flip()+
+  labs(y="Hazard Ratio", x="")
+```
+
+
+```{r, manual forest}
+plot_data <- data.frame(
+  Variable = c("White"),
+  point = hr,
+  Lower_Bound = lower_ci,
+  Upper_Bound = upper_ci
+)
+
+cox_mod3
+plot_data
+
+ggplot(plot_data,aes(x =Variable,y=point)) +
+  geom_point(size=1)+
+  geom_errorbar(aes(ymin =Lower_Bound, ymax=Upper_Bound), width=0.3) +
+  scale_y_log10()+
+  coord_flip()+
+  labs(y="Hazard Ratio", x="")
+```
+
+```{r}
+
+data_3<-data%>%
+  #filter(!EDUCREC2==0)%>%#Ask the group about this. The results change when removing missing values
+  #filter(!Earnings_recode=="NIU/Unknown")%>%
+  select(exposure_birth, Mort_recode, Race, AGE, sex, Diabetes_Lifetime_Race, BMI_R_Cat, Education_recode, Earnings_recode, Smoking_recode, Insurance_Status, USBorn_Recode, PERWEIGHT, PSU, Diabetes_Lifetime)%>%
+  mutate(study_exposure=exposure_birth-AGE)%>%
+  filter(!study_exposure==0)%>%
+  filter(Diabetes_Lifetime=="Diabetic")%>%
+  #mutate(Earnings_recode=factor(droplevels(Education_recode), c("Low Income ($1-$34,999)", "Middle Income($35,000-$74,999)","High Income(>$75,000)")))%>%
+  na.omit()
+
+
+data_weighted<-survey::svydesign(id=~PSU,
+          weights=~PERWEIGHT,
+          #strata=~racea2,
+          nest=TRUE,
+          survey.lonely.psu="adjust",
+          data=data_3)
+
+cox_diabetic_weighted<-svycoxph(Surv(AGE, exposure_birth, Mort_recode) ~ Race+ sex+ BMI_R_Cat+Education_recode+Earnings_recode+Smoking_recode+Insurance_Status+USBorn_Recode, design = data_weighted)
+
+
+summary(cox_diabetic_weighted)
+
+
+
+cox_unweighted<-coxph(Surv(AGE, exposure_birth, Mort_recode) ~ Race + sex + AGE+ BMI_R_Cat+Education_recode+Earnings_recode+Smoking_recode+Insurance_Status+USBorn_Recode, data = data_3)#Maybe fix the AGE variable and set the age at a single point in time
+
+
+summary(cox_unweighted)
+
+ggforest(cox_unweighted, fontsize = 0.5)
+
+```
+
+```{r, weighted cox diabetics only}
+data_3<-data_2%>%
+  filter(Diabetes_Lifetime=="Diabetic")
+
+table(data_3$Race, data_3$Mort_recode)
+
+data_4<-data_3%>%
+  mutate(exposure_survey=exposure_birth-AGE)
+
+
+data_weighted<-survey::svydesign(id=~PSU,
+          weights=~PERWEIGHT,
+          #strata=~STRATA,#When I remove the strata the code works? Talk to Dr. Bacong about
+          nest=TRUE,
+          survey.lonely.psu="adjust",
+          data=data_4)
+#Go back to this model
+cox_mod3<-svycoxph(Surv(AGE,exposure_birth, Mort_recode==TRUE) ~ Race +  sex+ BMI_R_Cat+Earnings_recode+Smoking_recode+Insurance_Status+USBorn_Recode+Education_recode, design = data_weighted)
+
+
+summary(cox_mod3)
+
+
+cox_mod4<-svycoxph(Surv(exposure_survey, Mort_recode==TRUE) ~ Race + AGE+ sex+ BMI_R_Cat+Earnings_recode+Smoking_recode+Insurance_Status+USBorn_Recode, design = data_weighted)
+
+
+summary(cox_mod4)
+
+cox_mod4<-svycoxph(Surv(AGE, exposure_birth, Mort_recode==TRUE) ~ Race + AGE+ sex+ BMI_R_Cat+Earnings_recode+Smoking_recode+Insurance_Status+USBorn_Recode, design = data_weighted)
+
+
+summary(cox_mod4)
+
+
+
+```
+
+
+```{r, creating forrest plot mannually}
+
+#practice with diabetes data
+data_forest<-data.frame(
+  Variable=c("non-Hispanic White\n(Reference)", "Chinese", "Filipino", "Asian Indian"),
+  Point_Estimate=c(1,0.8481, 0.7472, 0.6781),
+  Upper_Bound=c(1,0.7348, 0.7062, 0.4744),
+  Lower_Bound=c(1, 0.9788, 0.7907, 0.9694)
+)
+
+
+forest_plot_manual<-data_forest%>%
+  ggplot(aes(y=Variable, x=Point_Estimate, xmin=Lower_Bound, xmax=Upper_Bound))+
+  geom_point()+
+  geom_errorbarh(height=0.2)+
+  labs(x="Hazard Ratio", y="", title="Hazard Ratios for Asian Subgroups")+
+  #scale_x_log10()+#do I need to make log scale?
+  xlim(0,1.25)+
+  geom_vline(xintercept=1, lty=2)+
+  theme_minimal()+
+  theme(axis.text=element_text(size=15))
+
+
+  forest_plot_manual
+  
+library(grDevices)
+png(file="forest_plot_manual.png", width=500, height=250)
+forest_plot_manual
+dev.off()
+
+#ggsurvplot(cox_mod3)
+
+
+
+data_forest<-data.frame(
+  Variable=factor(c("Underweight", "Normal\n(Reference)", "Overweight", "Obese"),c("Obese", "Overweight", "Normal\n(Reference)", "Underweight") ),
+  Point_Estimate=c(1.4539, 1, 0.8622, 0.9850),
+  Upper_Bound=c(1.6918, 1,0.9126, 1.0473),
+  Lower_Bound=c(1.2494, 1, 0.8145, 0.9265)
+)
+
+
+forest_plot_manual2<-data_forest%>%
+  ggplot(aes(y=Variable, x=Point_Estimate, xmin=Lower_Bound, xmax=Upper_Bound))+
+  geom_point()+
+  geom_errorbarh(height=0.2)+
+  labs(x="Hazard Ratio", y="", title="Hazard Ratios for BMI Categories")+
+  #scale_x_log10()+#do I need to make log scale?
+  xlim(0,2)+
+  geom_vline(xintercept=1, lty=2)+
+  theme_minimal()+
+  theme(axis.text=element_text(size=15))
+
+
+  forest_plot_manual2
+  
+library(grDevices)
+png(file="forest_plot_manual2.png", width=500, height=250)
+forest_plot_manual2
+dev.off()
+
+#ggsurvplot(cox_mod3)
+
+
+
+#Education
+
+data_forest<-data.frame(
+  Variable=factor(c("Did Not Complete\nHigh School", "High School\n(Reference)", "Some College", "Bachelors", "Post Bachelor" ),c("Post Bachelor", "Bachelors", "Some College","High School\n(Reference)","Did Not Complete\nHigh School" ) ),
+  Point_Estimate=c(1.1412, 1, 0.9883, 0.8727, 0.8327),
+  Upper_Bound=c(1.1922,1,0.9984, 0.9358, 0.8981),
+  Lower_Bound=c(1.0924, 1, 0.9784, 0.8138, 0.7721)
+)
+
+
+forest_plot_manual2<-data_forest%>%
+  ggplot(aes(y=Variable, x=Point_Estimate, xmin=Lower_Bound, xmax=Upper_Bound))+
+  geom_point()+
+  geom_errorbarh(height=0.2)+
+  labs(x="Hazard Ratio", y="", title="Hazard Ratios for Education")+
+  #scale_x_log10()+#do I need to make log scale?
+  xlim(0.5,1.5)+
+  geom_vline(xintercept=1, lty=2)+
+  theme_minimal()+
+  theme(axis.text=element_text(size=15))
+
+
+  forest_plot_manual2
+  
+library(grDevices)
+png(file="forest_plot_manualEducation.png", width=500, height=250)
+forest_plot_manual2
+dev.off()
+
+
+#Earnings
+
+data_forest<-data.frame(
+  Variable=factor(c("Low Income ($1-$34,999)\n(Reference)", "Middle Income ($35,000-$74,999)", "High Income (>$75,000)"),c("High Income (>$75,000)", "Middle Income ($35,000-$74,999)","Low Income ($1-$34,999)\n(Reference)" ) ),
+  Point_Estimate=c(1, 0.7962, 0.6544),
+  Upper_Bound=c(1, 0.8237, 0.7584),
+  Lower_Bound=c(1, 0.7697, 0.5647)
+)
+
+
+forest_plot_manual2<-data_forest%>%
+  ggplot(aes(y=Variable, x=Point_Estimate, xmin=Lower_Bound, xmax=Upper_Bound))+
+  geom_point()+
+  geom_errorbarh(height=0.2)+
+  labs(x="Hazard Ratio", y="", title="Hazard Ratios for Earnings")+
+  #scale_x_log10()+#do I need to make log scale?
+  xlim(0,1.25)+
+  geom_vline(xintercept=1, lty=2)+
+  theme_minimal()+
+  theme(axis.text=element_text(size=15))
+
+
+  forest_plot_manual2
+  
+library(grDevices)
+png(file="forest_plot_manualEarnings.png", width=500, height=250)
+forest_plot_manual2
+dev.off()
+
+#Insurance
+
+data_forest<-data.frame(
+  Variable=factor(c("Covered", "Uncovered"),c("Uncovered", "Covered" ) ),
+  Point_Estimate=c(1, 1.1943),
+  Upper_Bound=c(1, 1.2827),
+  Lower_Bound=c(1, 1.1120)
+)
+
+
+forest_plot_manual2<-data_forest%>%
+  ggplot(aes(y=Variable, x=Point_Estimate, xmin=Lower_Bound, xmax=Upper_Bound))+
+  geom_point()+
+  geom_errorbarh(height=0.2)+
+  labs(x="Hazard Ratio", y="", title="Hazard Ratios for Insurance Status")+
+  #scale_x_log10()+#do I need to make log scale?
+  xlim(0.5,1.5)+
+  geom_vline(xintercept=1, lty=2)+
+  theme_minimal()+
+  theme(axis.text=element_text(size=15))
+
+
+  forest_plot_manual2
+  
+library(grDevices)
+png(file="forest_plot_manualInsurance.png", width=500, height=250)
+forest_plot_manual2
+dev.off()
+
+
+
+
+#Nativity
+
+data_forest<-data.frame(
+  Variable=factor(c("US Born", "Born Outside US"),c("Born Outside US", "US Born" ) ),
+  Point_Estimate=c(1, 0.7652),
+  Upper_Bound=c(1, 0.8119),
+  Lower_Bound=c(1, 0.7212)
+)
+
+
+forest_plot_manual2<-data_forest%>%
+  ggplot(aes(y=Variable, x=Point_Estimate, xmin=Lower_Bound, xmax=Upper_Bound))+
+  geom_point()+
+  geom_errorbarh(height=0.2)+
+  labs(x="Hazard Ratio", y="", title="Hazard Ratios for Nativity")+
+  #scale_x_log10()+#do I need to make log scale?
+  xlim(0.6,1.2)+
+  geom_vline(xintercept=1, lty=2)+
+  theme_minimal()+
+  theme(axis.text=element_text(size=15))
+
+
+  forest_plot_manual2
+  
+library(grDevices)
+png(file="forest_plot_manualNativity.png", width=500, height=250)
+forest_plot_manual2
+dev.off()
+
+```
+
+
+```{r, manual plots combined}
+
+data_forest<-data.frame(
+  Variable=factor(c("non-Hispanic White\n(Reference)", "Chinese", "Filipino", "Asian Indian", "", "Underweight", "Normal\n(Reference)", "Overweight", "Obese"),c(
+    c("Obese", "Overweight", "Normal\n(Reference)", "Underweight","", "Asian Indian", "Filipino", "Chinese", "non-Hispanic White\n(Reference)"
+  ))),
+  Point_Estimate=c(1,0.8481, 0.7472, 0.6781,NA, 1.4539, 1, 0.8622, 0.9850),
+  Upper_Bound=c(1,0.7348, 0.7062, 0.4744,NA, 1.6918, 1,0.9126, 1.0473 ),
+  Lower_Bound=c(1, 0.9788, 0.7907, 0.9694,NA, 1.2494, 1, 0.8145, 0.9265)
+)
+
+
+forest_plot_manual3<-data_forest%>%
+  ggplot(aes(y=Variable, x=Point_Estimate, xmin=Lower_Bound, xmax=Upper_Bound))+
+  geom_point()+
+  geom_errorbarh(height=0.2)+
+  labs(x="Hazard Ratio", y="", title="Hazard Ratios for Asian Subgroups\nand BMI Cutoffs")+
+  #scale_x_log10()+#do I need to make log scale?
+  xlim(0,2)+
+  geom_vline(xintercept=1, lty=2)+
+  theme_minimal()+
+  theme(axis.text=element_text(size=10))
+
+
+  forest_plot_manual3
+  
+library(grDevices)
+png(file="forest_plot_manual3.png", width=500, height=250)
+forest_plot_manual3
+dev.off()
+
+```
+
+
+```{r}
+data_2<-data%>%
+  # filter(!EDUCREC2==0)%>%#Ask the group about this. The results change when removing missing values
+  # filter(!Earnings_recode=="NIU/Unknown")%>%
+  select(exposure_birth, Mort_recode, Race, AGE, sex, Diabetes_Lifetime_Race, Diabetes_Lifetime, BMI_R_Cat, Education_recode, Earnings_recode, Smoking_recode, Insurance_Status, USBorn_Recode, PERWEIGHT, PSU, STRATA, MORTUCODLD)%>%
+  mutate(study_exposure=exposure_birth-AGE)%>%
+  filter(!study_exposure==0)%>%
+  na.omit()
+
+
+data_2%>%
+  filter(!MORTUCODLD==96)%>%
+  ggplot(aes(x=as_factor(MORTUCODLD), fill=Race))+
+  geom_bar(position="dodge")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+
+
+
+
+```
+
+
+```{r}
+
+data_practice<-data_2%>%#manually making the interaction term
+  mutate(Diabetes_Over_Race=as_factor(ifelse(
+    Diabetes_Lifetime=="Diabetic",
+    case_when(
+      Race=="White"~"White Diabetic",
+      Race=="Asian Indian"~"Asian Indian Diabetic",
+      Race=="Filipino" ~"Filipino Diabetic",
+      Race=="Chinese"~"Chinese Diabetic",
+      TRUE~"Check Code"),
+    case_when(
+      Race=="White"~"White Non-diabetic",
+      Race=="Asian Indian"~"Asian Indian Non-diabetic",
+      Race=="Filipino" ~"Filipino Non-diabetic",
+      Race=="Chinese"~"Chinese Non-diabetic",
+      TRUE~"Check Code")
+  )))%>%
+  mutate(Diabetes_Over_Race=factor(Diabetes_Over_Race, c("White Non-diabetic","Asian Indian Non-diabetic", "Filipino Non-diabetic", "Chinese Non-diabetic","White Diabetic",  "Asian Indian Diabetic", "Filipino Diabetic", "Chinese Diabetic" )))
+
+cox_mod3<-coxph(Surv(AGE, exposure_birth, Mort_recode) ~ strata(Diabetes_Over_Race) + sex+ BMI_R_Cat+Education_recode+Earnings_recode+Smoking_recode+USBorn_Recode, data = data_practice)
+
+
+
+
+plot(survfit(cox_mod3), xlab="Years",ylab="Proportion Alive", ylim=c(0,1), xlim=c(0,110), col=1:4, lty=c(1,1,1,1,2,2,2,2))
+
+legend("bottomleft", legend=levels(data_practice$Diabetes_Over_Race), col=1:4, lty=c(1,1,1,1,2,2,2,2))
+
+
+cox_mod3<-coxph(Surv(AGE, exposure_birth, Mort_recode) ~ Race + sex+ Diabetes_Lifetime+BMI_R_Cat+Education_recode+Earnings_recode+Smoking_recode+USBorn_Recode, data = data_2)
+
+summary(cox_mod3)
+```
