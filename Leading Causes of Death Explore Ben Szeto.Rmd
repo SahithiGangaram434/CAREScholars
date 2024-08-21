@@ -1,0 +1,86 @@
+---
+title: "Leading Causes of Death Explore Ben Szeto"
+author: "Ben Szeto"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+data
+
+```
+
+
+```{r, total number of people}
+data%>%
+  group_by(Race)%>%
+  count()
+
+```
+
+```{r}
+data%>%
+  group_by(Race, as_factor(MORTSTAT))%>%
+  count()
+
+```
+
+```{r}
+leading_causes_of_death<-data%>%
+  filter(MORTSTAT==1)%>%
+  group_by(Race)%>%
+  mutate(Race_Count=n())%>%
+  group_by(Race, as_factor(MORTUCODLD))%>%
+  summarize(
+    n(),
+    percent=round(n()/first(Race_Count)*100,2)
+  )
+
+leading_causes_of_death
+```
+
+```{r}
+
+leading_causes_of_death%>%
+  pivot_wider(
+    names_from=`as_factor(MORTUCODLD)`,
+    values_from = percent
+  )
+
+```
+
+```{r}
+leading_causes_of_death%>%
+  ggplot()+
+  geom_col(aes(x=`as_factor(MORTUCODLD)`, y=percent, fill=Race), stat="identity", position="dodge")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+```{r}
+
+leading_causes_of_death_diabetic<-data%>%
+  filter(MORTSTAT==1, Diabetes_Lifetime=="Diabetic")%>%
+  group_by(Race)%>%
+  mutate(Race_Count=n())%>%
+  group_by(Race, as_factor(MORTUCODLD))%>%
+  summarize(
+    n(),
+    percent=round(n()/first(Race_Count)*100,2)
+  )
+
+leading_causes_of_death_diabetic
+```
+
+
+```{r}
+leading_causes_of_death_diabetic%>%
+  ggplot()+
+  geom_col(aes(x=`as_factor(MORTUCODLD)`, y=percent, fill=Race), stat="identity", position="dodge")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  labs(title="Leading Causes of Death Among Diabetics By Race (percent)")
+
+```
