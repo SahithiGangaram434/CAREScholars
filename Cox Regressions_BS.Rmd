@@ -77,13 +77,13 @@ data_weighted<-survey::svydesign(id=~PSU,
           survey.lonely.psu="adjust",
           data=data_2)
 
-cox_mod3<-svycoxph(Surv(AGE,exposure_birth, Mort_recode==TRUE) ~ Race + Diabetes_Lifetime_Race+ sex+ BMI_R_Cat+Education_recode+Earnings_recode+Smoking_recode+Insurance_Status+USBorn_Recode, design = data_weighted)
+cox_mod3<-svycoxph(Surv(study_exposure, Mort_recode==TRUE) ~ Race + AGE+Diabetes_Lifetime_Race+ sex+ BMI_R_Cat+Education_recode+Earnings_recode+Smoking_recode+Insurance_Status+USBorn_Recode, design = data_weighted)
 
 
 summary(cox_mod3)
 
 
-ggforest(cox_mod3,data=data_2)
+#ggforest(cox_mod3,data=data_2)
 
 
 
