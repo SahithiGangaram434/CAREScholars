@@ -146,7 +146,22 @@ data<-data%>%
     exposure_birth,
     NA
   ))%>%
-  mutate(Age_Diabetes_Diagnosis=ifelse(DIABETICAGE==96, NA, DIABETICAGE))
+  mutate(Age_Diabetes_Diagnosis=ifelse(DIABETICAGE==96, NA, DIABETICAGE))%>%
+  mutate(Diabetes_Over_Race=as_factor(ifelse(
+    Diabetes_Lifetime=="Diabetic",
+    case_when(
+      Race=="White"~"White Diabetic",
+      Race=="Asian Indian"~"Asian Indian Diabetic",
+      Race=="Filipino" ~"Filipino Diabetic",
+      Race=="Chinese"~"Chinese Diabetic",
+      TRUE~"Check Code"),
+    case_when(
+      Race=="White"~"White Non-diabetic",
+      Race=="Asian Indian"~"Asian Indian Non-diabetic",
+      Race=="Filipino" ~"Filipino Non-diabetic",
+      Race=="Chinese"~"Chinese Non-diabetic",
+      TRUE~"Check Code")
+  )))
 
 ```
 
@@ -160,7 +175,8 @@ data<-data%>%
   mutate(Earnings_recode=factor(Earnings_recode, c("Low Income ($1-$34,999)", "Middle Income($35,000-$74,999)","High Income(>$75,000)", "NIU/Unknown")))%>%
   mutate(sex=factor(droplevels(sex), c("Male", "Female")))%>%
   mutate(Diabetes_Lifetime_Race=factor(Diabetes_Lifetime_Race, c("Non-Diabetic","White Diabetic", "Chinese Diabetic", "Filipino Diabetic","Asian Indian Diabetic")))%>%
-  mutate(Diabetes_Lifetime=factor(Diabetes_Lifetime, c("Non-Diabetic", "Diabetic")))
+  mutate(Diabetes_Lifetime=factor(Diabetes_Lifetime, c("Non-Diabetic", "Diabetic")))%>%
+  mutate(Diabetes_Over_Race=factor(Diabetes_Over_Race, c("White Non-diabetic","Asian Indian Non-diabetic", "Filipino Non-diabetic", "Chinese Non-diabetic","White Diabetic",  "Asian Indian Diabetic", "Filipino Diabetic", "Chinese Diabetic" )))
   
   
 
@@ -176,7 +192,7 @@ data<-data%>%
   filter(!BMI==0)%>% #filtering out extraneous BMIs
   filter(BMI<90)%>%
   filter(MORTELIG==1)%>%#Make sure part of mortality data set
-  filter(!(HISPYN==2 & Race=="White"))#Removing NHW
+  filter(!(HISPYN==2 & Race=="White"))
 ```
 
 
