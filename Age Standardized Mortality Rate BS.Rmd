@@ -1,0 +1,258 @@
+---
+title: "Age Standardized Mortality Rate"
+author: "Ben Szeto"
+date: "2024-09-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(tidyverse)
+library(surveil)
+
+```
+
+
+```{r, data collection}
+data
+Census_2000<-surveil::standard%>%#2000 census population from the surveil package. Need to review what the denominator is? The Shah paper used the 2000 census
+  mutate(AgeGroup=factor(age))
+```
+
+```{r, Creating Age at Start of Follow up 1997}
+
+
+Crude_Summary<-data%>%
+  select(YEAR, AGE, MORTSTAT, Race)%>%
+  mutate(Age1997=AGE-YEAR+1997)%>%
+  filter(Age1997>=0)%>%#Removing anyone who wasnt alive in 1997 Should I also remove people who were 0?
+  mutate(AgeGroup=factor(case_when(
+    Age1997%in%c(0)~"<1",
+    Age1997%in%c(1:4)~"1-4",
+    Age1997%in%c(5:9)~"5-9",
+    Age1997%in%c(10:14)~"10-14",
+    Age1997%in%c(15:19)~"15-19",
+    Age1997%in%c(20:24)~"20-24",
+    Age1997%in%c(25:29)~"25-29",
+    Age1997%in%c(30:34)~"30-34",
+    Age1997%in%c(35:39)~"35-39",
+    Age1997%in%c(40:44)~"40-44",
+    Age1997%in%c(45:49)~"45-49",
+    Age1997%in%c(50:54)~"50-54",
+    Age1997%in%c(55:59)~"55-59",
+    Age1997%in%c(60:64)~"60-64",
+    Age1997%in%c(65:69)~"65-69",
+    Age1997%in%c(70:74)~"70-74",
+    Age1997%in%c(75:79)~"75-79",
+    Age1997%in%c(80:84)~"80-84",
+    Age1997>=85~"85+",
+    TRUE~"Check"
+    
+  )))%>%
+  mutate(MORTSTAT=as_factor(MORTSTAT))%>%
+  group_by(AgeGroup, Race)%>%
+  summarize(
+    NumDead=sum(MORTSTAT=="Assumed deceased"),
+    Pop=n()
+  )%>%
+  mutate(CrudeMortalityRate=NumDead/Pop)
+
+Crude_Summary
+
+```
+
+```{r, calculating the proportion of each age group}
+Census_2000<-Census_2000%>%
+  mutate(AgeProp=standard_pop/sum(standard_pop))
+
+Census_2000
+
+```
+
+
+```{r}
+Crude_Summary
+Census_2000
+
+Adjusted_Age_Summary<-merge(Crude_Summary, Census_2000, by="AgeGroup")%>%
+  mutate(AgeSpecAdj=CrudeMortalityRate*AgeProp)%>%
+    select(Race, AgeGroup, CrudeMortalityRate,Pop, AgeSpecAdj)
+
+Adjusted_Age_Summary
+
+
+Adjusted_Age_Summary%>%
+  group_by(Race)%>%
+  summarize(
+    ASMR=sum(AgeSpecAdj)
+  )
+```
+
+
+Attempting to Stratify by Race and Sex
+
+
+```{r, Creating Age at Start of Follow up 1997}
+
+
+Crude_Summary<-data%>%
+  select(YEAR, AGE, MORTSTAT, Race, sex)%>%
+  mutate(Age1997=AGE-YEAR+1997)%>%
+  filter(Age1997>=0)%>%#Removing anyone who wasnt alive in 1997 Should I also remove people who were 0?
+  mutate(AgeGroup=factor(case_when(
+    Age1997%in%c(0)~"<1",
+    Age1997%in%c(1:4)~"1-4",
+    Age1997%in%c(5:9)~"5-9",
+    Age1997%in%c(10:14)~"10-14",
+    Age1997%in%c(15:19)~"15-19",
+    Age1997%in%c(20:24)~"20-24",
+    Age1997%in%c(25:29)~"25-29",
+    Age1997%in%c(30:34)~"30-34",
+    Age1997%in%c(35:39)~"35-39",
+    Age1997%in%c(40:44)~"40-44",
+    Age1997%in%c(45:49)~"45-49",
+    Age1997%in%c(50:54)~"50-54",
+    Age1997%in%c(55:59)~"55-59",
+    Age1997%in%c(60:64)~"60-64",
+    Age1997%in%c(65:69)~"65-69",
+    Age1997%in%c(70:74)~"70-74",
+    Age1997%in%c(75:79)~"75-79",
+    Age1997%in%c(80:84)~"80-84",
+    Age1997>=85~"85+",
+    TRUE~"Check"
+    
+  )))%>%
+  mutate(MORTSTAT=as_factor(MORTSTAT))%>%
+  group_by(AgeGroup, Race, sex)%>%
+  summarize(
+    NumDead=sum(MORTSTAT=="Assumed deceased"),
+    Pop=n()
+  )%>%
+  mutate(CrudeMortalityRate=NumDead/Pop)
+
+Crude_Summary
+
+```
+
+
+
+
+```{r, calculating the proportion of each age group}
+Census_2000<-Census_2000%>%
+  mutate(AgeProp=standard_pop/sum(standard_pop))
+
+Census_2000
+
+```
+
+
+```{r}
+Crude_Summary
+Census_2000
+
+Adjusted_Age_Summary<-merge(Crude_Summary, Census_2000, by="AgeGroup")%>%
+  mutate(AgeSpecAdj=CrudeMortalityRate*AgeProp)%>%
+    select(Race, sex, AgeGroup, CrudeMortalityRate,Pop, AgeSpecAdj)
+
+Adjusted_Age_Summary
+
+
+Adjusted_Age_Summary%>%
+  group_by(Race, sex)%>%
+  summarize(
+    ASMR=sum(AgeSpecAdj)
+  )
+```
+
+
+
+Making it a function
+
+
+```{r}
+ASMR_Bivariable<-function(data, variable1, variable2){
+#Creating Age at Start of Follow up 1997
+Crude_Summary<-{{data}}%>%
+  select(YEAR, AGE, MORTSTAT, {{variable1}}, {{variable2}})%>%
+  mutate(Age1997=AGE-YEAR+1997)%>%
+  filter(Age1997>=0)%>%#Removing anyone who wasnt alive in 1997 Should I also remove people who were 0?
+  mutate(AgeGroup=factor(case_when(
+    Age1997%in%c(0)~"<1",
+    Age1997%in%c(1:4)~"1-4",
+    Age1997%in%c(5:9)~"5-9",
+    Age1997%in%c(10:14)~"10-14",
+    Age1997%in%c(15:19)~"15-19",
+    Age1997%in%c(20:24)~"20-24",
+    Age1997%in%c(25:29)~"25-29",
+    Age1997%in%c(30:34)~"30-34",
+    Age1997%in%c(35:39)~"35-39",
+    Age1997%in%c(40:44)~"40-44",
+    Age1997%in%c(45:49)~"45-49",
+    Age1997%in%c(50:54)~"50-54",
+    Age1997%in%c(55:59)~"55-59",
+    Age1997%in%c(60:64)~"60-64",
+    Age1997%in%c(65:69)~"65-69",
+    Age1997%in%c(70:74)~"70-74",
+    Age1997%in%c(75:79)~"75-79",
+    Age1997%in%c(80:84)~"80-84",
+    Age1997>=85~"85+",
+    TRUE~"Check"
+    
+  )))%>%
+  mutate(MORTSTAT=as_factor(MORTSTAT))%>%
+  group_by(AgeGroup, {{variable1}}, {{variable2}})%>%
+  summarize(
+    NumDead=sum(MORTSTAT=="Assumed deceased"),
+    Pop=n()
+  )%>%
+  mutate(CrudeMortalityRate=NumDead/Pop)
+
+
+
+#calculating the proportion of each age group
+Census_2000<-Census_2000%>%
+  mutate(AgeProp=standard_pop/sum(standard_pop))
+
+
+
+#Summarizing data
+
+
+Adjusted_Age_Summary<-merge(Crude_Summary, Census_2000, by="AgeGroup")%>%
+  mutate(AgeSpecAdj=CrudeMortalityRate*AgeProp)%>%
+    select({{variable1}}, {{variable2}}, AgeGroup, CrudeMortalityRate,Pop, AgeSpecAdj)
+
+Adjusted_Age_Summary
+
+
+Adjusted_Age_Summary<-Adjusted_Age_Summary%>%
+  group_by({{variable1}}, {{variable2}})%>%
+  summarize(
+    ASMR=sum(AgeSpecAdj)
+  )
+
+Adjusted_Age_Summary
+}
+```
+
+```{r}
+
+ASMR_Bivariable(data,Race, sex)
+
+
+ASMR_Bivariable(data,Race, sex)
+```
+
+
+Doing the way of regression
+```{r}
+
+
+
+```
+
+

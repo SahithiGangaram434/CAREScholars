@@ -25,7 +25,7 @@ levels(data$Education_recode)
 data_2<-data%>%
   # filter(!EDUCREC2==0)%>%#Ask the group about this. The results change when removing missing values
   # filter(!Earnings_recode=="NIU/Unknown")%>%
-  select(exposure_birth, Mort_recode, Race, AGE, sex, Diabetes_Lifetime_Race, Diabetes_Lifetime, BMI_R_Cat, Education_recode, Earnings_recode, Smoking_recode, Insurance_Status, USBorn_Recode, PERWEIGHT, PSU, STRATA)%>%
+  select(exposure_birth, Mort_recode, Race, AGE, sex, Diabetes_Lifetime_Race, Diabetes_Lifetime, BMI_R_Cat, Education_recode, Earnings_recode, Smoking_recode, Insurance_Status, USBorn_Recode, PERWEIGHT, PSU, STRATA, Diabetes_Over_Race)%>%
   mutate(study_exposure=exposure_birth-AGE)%>%
   filter(!study_exposure==0)%>%
   na.omit()
@@ -589,5 +589,66 @@ forest_plot_manual<-data_forest%>%
 
 
 forest_plot_manual
+
+```
+
+```{r, total population removing diabetes race interaction}
+
+data_weighted<-survey::svydesign(id=~PSU,
+          weights=~PERWEIGHT,
+          strata=~STRATA,
+          nest=TRUE,
+          survey.lonely.psu="adjust",
+          data=data_2)
+
+cox_weighted<-svycoxph(Surv(study_exposure, Mort_recode==TRUE) ~ Race + AGE+Diabetes_Lifetime+ sex+ BMI_R_Cat+Education_recode+Earnings_recode+Smoking_recode+Insurance_Status+USBorn_Recode, design = data_weighted)
+
+summary(cox_weighted)
+
+```
+
+```{r, total population race by diabetes 8 groups}
+
+
+data_weighted<-survey::svydesign(id=~PSU,
+          weights=~PERWEIGHT,
+          #strata=~STRATA,
+          nest=TRUE,
+          survey.lonely.psu="adjust",
+          data=data_2)
+
+cox_weighted<-svycoxph(Surv(study_exposure, Mort_recode==TRUE) ~ Diabetes_Over_Race + AGE+ sex+ BMI_R_Cat+Education_recode+Earnings_recode+Smoking_recode+Insurance_Status+USBorn_Recode, design = data_weighted)
+
+summary(cox_weighted)
+
+
+```
+
+```{r, forest plot total population single diabetes term}
+
+#practice with diabetes data
+data_forest<-data.frame(
+  Variable=c("non-Hispanic White\n(Reference)", "Chinese", "Filipino", "Asian Indian", " ", "Non-Diabetic (ref)", "Diabetic"),
+  Point_Estimate=c(1, 0.7188, 0.7763, 0.6575, NA, 1, 1.8840 ),
+  Lower_Bound=c(1, 0.6227, 0.6874, 0.5305,NA , 1 , 1.8426),
+  Upper_Bound=c(1,0.8297, 0.8767, 0.8150, NA, 1 , 1.9264)
+)%>%
+  mutate(Variable=factor(Variable, c("Diabetic", "Non-Diabetic (ref)", " ", "Asian Indian", "Filipino", "Chinese","non-Hispanic White\n(Reference)")))
+
+
+forest_plot_manual<-data_forest%>%
+  ggplot(aes(y=Variable, x=Point_Estimate, xmin=Lower_Bound, xmax=Upper_Bound))+
+  geom_point()+
+  geom_errorbarh(height=0.2)+
+  labs(x="Hazard Ratio", y="", title="Hazard Ratios for Asian Subgroups")+
+  #scale_x_log10()+#do I need to make log scale?
+  xlim(0,2)+
+  geom_vline(xintercept=1, lty=2)+
+  theme_minimal()+
+  theme(axis.text=element_text(size=15))
+
+
+forest_plot_manual
+
 
 ```

@@ -192,7 +192,7 @@ data<-data%>%
   filter(!BMI==0)%>% #filtering out extraneous BMIs
   filter(BMI<90)%>%
   filter(MORTELIG==1)%>%#Make sure part of mortality data set
-  filter(!(HISPYN==2 & Race=="White"))
+  filter(!(HISPYN==2 & Race=="White"))#Removing NHW
 ```
 
 
