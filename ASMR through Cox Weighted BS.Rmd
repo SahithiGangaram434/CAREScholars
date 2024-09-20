@@ -1,0 +1,581 @@
+---
+title: "ASMR Using Cox Weighted Regression"
+author: "Ben Szeto"
+date: "2024-09-10"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, libaries}
+
+library(tidyverse)
+library(srvyr)
+library(survey)
+library(survival)
+```
+<!-- R documentation for the survey package: https://cran.r-project.org/web/packages/survey/survey.pdf -->
+
+<!-- ```{r, data for analysis} -->
+<!-- #Removing missing values from selected columns -->
+<!-- data_naomit<-data%>% -->
+<!--   mutate(study_exposure=exposure_birth-AGE)%>%#Move this the data_clean RMD eventually -->
+<!--   filter(!study_exposure==0)%>%#Removing people with 0 exposure time -->
+<!--   select(Race, Mort_recode, study_exposure, AGE,#Selected columns -->
+<!--          PSU, STRATA, PERWEIGHT)%>%#columns for data weighting -->
+<!--   na.omit() -->
+
+
+<!-- #Weighting the data -->
+
+<!-- data_weighted<-svydesign(id=~PSU, -->
+<!--           weights=~PERWEIGHT, -->
+<!--           strata=~STRATA, -->
+<!--           nest=TRUE, -->
+<!--           survey.lonely.psu="adjust", -->
+<!--           data=data_naomit) -->
+
+<!-- ``` -->
+
+<!-- ```{r, cox weighted regression} -->
+<!-- cox_weighted<-svycoxph(Surv(study_exposure, Mort_recode==TRUE) ~ Race + AGE, design = data_weighted) #check the desired method for time on cox -->
+
+<!-- summary(cox_weighted) -->
+
+
+
+<!-- ``` -->
+
+<!-- ```{r, trying to gather base hazard for weighted regression} -->
+
+
+<!-- ``` -->
+
+
+
+<!-- ```{r, extracting values from the cox weighted regression table} -->
+
+<!-- AGE_HR<-exp(cox_weighted$coefficients["AGE"])#Hazard ratio of age -->
+
+<!-- Races<-levels(data$Race) -->
+
+
+
+<!-- ``` -->
+
+
+<!-- ```{r, creating model matrix} -->
+
+<!-- covariate_pattern<-data.frame(Race="White", AGE=60)#Review what to use for this -->
+
+<!-- model.matrix(~Race+ AGE, data=covariate_pattern) -->
+
+
+<!-- ``` -->
+
+
+<!-- PRACTICE WITH UNWIEGHTED DATA -->
+<!-- ```{r, doing the code with the unweighted regresison} -->
+
+<!-- cox_unweighted<-coxph(Surv(study_exposure, Mort_recode==TRUE) ~ Race + AGE, data = data_naomit)  -->
+
+
+<!-- AGE_HR<-exp(cox_unweighted$coefficients["AGE"]) -->
+
+<!-- Races<-levels(data$Race) -->
+
+
+<!-- for (i in 1:4){ -->
+<!--   race_data<-subset(data, Race==Races[i]) -->
+<!--   Race_AGE_IR<-Base_IR* -->
+<!-- } -->
+
+<!-- ``` -->
+
+<!-- ```{r, practice calculating baseline incidence rate} -->
+<!-- table(data_naomit$Mort_recode) -->
+
+
+<!-- TRUE_count<-sum(data_naomit$Mort_recode==TRUE) -->
+<!-- #FALSE_count<-sum(data_naomit$Mort_recode==FALSE) -->
+<!-- Total_count<-nrow(data_naomit) -->
+
+<!-- baseline_incidence_rate<-TRUE_count/Total_count -->
+
+<!-- baseline_incidence_rate -->
+<!-- ``` -->
+
+<!-- ```{r, emulated code Dr Bacong from example 1} -->
+
+<!-- table(data_naomit$Mort_recode) -->
+
+
+<!-- TRUE_count<-sum(data_naomit$Mort_recode==TRUE) -->
+<!-- #FALSE_count<-sum(data_naomit$Mort_recode==FALSE) -->
+<!-- Total_count<-nrow(data_naomit) -->
+
+<!-- baseline_incidence_rate<-TRUE_count/Total_count -->
+
+<!-- baseline_incidence_rate -->
+
+
+
+<!-- #baseline_incidence_rate<-100#Placeholder (need to figure out how to do with weighted regression) -->
+<!-- data_naomit<-data_naomit%>% -->
+<!--   mutate(AGE=as.numeric(AGE)) -->
+<!-- cox_unweighted<-coxph(Surv(study_exposure, Mort_recode==TRUE) ~ Race + AGE, data = data_naomit) -->
+<!-- AGE_HR<-exp(cox_unweighted$coefficients["AGE"]) -->
+<!-- Races<-c("White", "Chinese", "Asian Indian", "Filipino") -->
+<!-- age_adjusted_incidence_rates <- numeric(length(Races)) #Used later when references i -->
+
+<!-- for (i in 1:length(Races)) { -->
+<!--   race_specific_data <- subset(data_naomit, Race == Races[i]) -->
+<!--   race_age_adjusted_incidence_rate <- baseline_incidence_rate * AGE_HR^mean(race_specific_data$AGE - mean(data_naomit$AGE)) -->
+<!--   age_adjusted_incidence_rates[i] <- race_age_adjusted_incidence_rate -->
+<!-- } -->
+
+
+<!-- age_adjusted_incidence_rates -->
+<!-- #is this even doing anything with race or is it simply calculating hazard ratios by considering differences in age? -->
+<!-- ``` -->
+
+<!-- ```{r, code Dr Bacongm, example 1} -->
+
+<!-- # Assuming baseline incidence rate, average age difference, and creating a dataset with race, age, time, and status -->
+<!-- baseline_incidence_rate <- 100 -->
+<!-- average_age_difference <- 5 -->
+<!-- data <- data.frame(race = c("White", "Black", "White", "Hispanic", "Black"), -->
+<!--                    age = c(50, 60, 45, 55, 65), -->
+<!--                    time = c(5, 10, 15, 20, 25), -->
+<!--                    status = c(1, 1, 0, 0, 1)) -->
+
+
+
+<!-- # Fit Cox proportional hazards regression model with age and race -->
+<!-- cox_model <- coxph(Surv(time, status) ~ race + age, data = data) -->
+
+<!-- # Extract the hazard ratio for the age variable -->
+<!-- age_hazard_ratio <- exp(cox_model$coefficients["age"]) -->
+
+<!-- # Calculate age-adjusted incidence rates by race -->
+<!-- race_list <- unique(data$race) -->
+<!-- age_adjusted_incidence_rates <- numeric(length(race_list)) -->
+<!-- for (i in 1:length(race_list)) { -->
+<!--   race_data <- subset(data, race == race_list[i]) -->
+<!--   race_age_adjusted_incidence_rate <- baseline_incidence_rate * age_hazard_ratio^mean(race_data$age - mean(data$age)) -->
+<!--   age_adjusted_incidence_rates[i] <- race_age_adjusted_incidence_rate -->
+<!-- } -->
+
+<!-- age_adjusted_incidence_rates_by_race <- data.frame(race = race_list, age_adjusted_incidence_rate = age_adjusted_incidence_rates) -->
+<!-- print(age_adjusted_incidence_rates_by_race) -->
+
+
+<!-- ``` -->
+
+
+
+<!-- ```{r, Dr Bacong Code 2} -->
+<!-- # Load the survival package -->
+<!-- library(survival) -->
+
+<!-- # Create a dataset with covariates (e.g., age, sex, treatment) and time-to-event data -->
+<!-- data <- lung  # Example dataset included in the survival package -->
+
+<!-- data<-data%>% -->
+<!--   mutate(sex=ifelse(sex==1, "male", "female"))%>% -->
+<!--   mutate(sex=as_factor(sex)) -->
+
+<!-- unique(data$sex) -->
+
+<!-- # Fit a Cox proportional hazards regression model -->
+<!-- cox_model <- coxph(Surv(time, status) ~ age + sex + ph.karno, data = data) -->
+
+<!-- # Specify the covariate patterns for which you want marginal values -->
+<!-- covariate_pattern <- data.frame(age = 60, sex = "male", ph.karno = 70) -->
+
+<!-- # Calculate the baseline survival function -->
+<!-- baseline_survival <- basehaz(cox_model) -->
+
+<!-- # Predict the survival probabilities at specific time points for the covariate patterns -->
+<!-- time_points <- c(100, 200, 300)  # Example time points -->
+<!-- covariate_matrix <- model.matrix(~ age + sex + ph.karno, data = covariate_pattern) -->
+<!-- marginal_values <- predict(cox_model, newdata = covariate_matrix, type = "risk", t = time_points, baseline = baseline_survival) -->
+
+<!-- print(marginal_values) -->
+
+
+
+
+<!-- ``` -->
+
+
+
+#Post 9/12/24 Meeting ASMR
+
+svyr package notes: https://cran.r-project.org/web/packages/srvyr/srvyr.pdf
+
+```{r}
+
+data_change<-data%>%
+  mutate(study_exposure=exposure_birth-AGE)#%>%
+  #filter(!study_exposure==0)%>%
+  #filter(STRATA==5002)%>%
+  #na.omit() #I believe naomitting cause the errors. need to review this and whether it is compatible with our other analysis
+data_weighted_survey<-as_survey(data_change,
+                         id=PSU,
+                         weight=PERWEIGHT,
+                         strata=STRATA,#Review this error. Dont quite understand
+                         nest=TRUE)
+
+
+table_1_weight_quant<-function(dataset, variable){
+  
+  variable_string_name <- deparse(substitute(variable))
+  column_name<- paste(variable_string_name, "_point_int")
+  
+  dataset%>%
+  group_by(Race) %>%
+  summarize(
+    survey_mean({{variable}})
+  )%>%
+  mutate(t_val=1.96)%>%#Using a fixed t-value of 1.96
+  mutate(lower_bound=coef-t_val*`_se`)%>%
+  mutate(upper_bound=coef+t_val*`_se`)%>%
+  mutate(!!column_name :=  paste0(round(coef, 1), ", (", round(lower_bound, 1), "-", round(upper_bound, 1), ")")) %>%
+    select(Race,!!column_name)
+  #Maybe try to rotate
+}
+
+
+table_1_weight_quant(data_weighted_survey, study_exposure)
+
+
+
+#THIS STUFF NOT USED FOR ANALYSIS  (MORE FOR LATER INTEREST)
+data_weighted_survey%>%#Calculating the total number of exposure years for each race
+  group_by(Race)%>%
+  summarize(
+    survey_total(study_exposure)
+  )
+
+
+data_weighted_survey%>%#Calculating the number of dead/alive each group race weighted
+  group_by(Race, MORTSTAT)%>%
+  summarize(
+    survey_total()
+  )
+#1 is assumed deceased
+#2 assumed alive
+
+
+
+
+
+#Calculating Baseline Mortality Rate
+
+
+#FOR ANALYSIS
+total_exposure_years_df<-data_weighted_survey%>%#Calculating the total number of exposure years for each race
+  summarize(
+    survey_total(study_exposure)
+  )%>%
+  as.data.frame()
+
+
+total_dead_df<-data_weighted_survey%>%#Calculating the number of dead/alive each group race weighted
+  group_by(MORTSTAT)%>%
+  summarize(
+    survey_total()
+  )%>%
+  as.data.frame()
+#1 is assumed deceased
+#2 assumed alive
+
+
+
+total_exposure_years_df
+total_dead_df
+
+
+total_exposure_years<-total_exposure_years_df[1,1]#Total number of years
+se_exposure_years<-total_exposure_years_df[1,2]#SE of total number of years
+
+total_dead<-total_dead_df[1,2]#Total dead
+se_dead<-total_dead_df[1,3]#SE of total dead
+
+
+total_exposure_years
+se_exposure_years
+total_dead
+se_dead
+
+#propogation of error for baseline (should go back and check the formula)
+
+baseline_rate_se<-(total_dead/total_exposure_years)*
+  sqrt(
+    (se_exposure_years/total_exposure_years)^2+
+      (se_dead/total_dead)^2
+  )
+
+#point estimate baseline
+baseline_rate<-total_dead/total_exposure_years
+
+
+paste("baseline rate:", baseline_rate)
+paste("baseline rate se:", baseline_rate_se)
+
+```
+
+```{r}
+data
+
+data_weighted<-svydesign(id=~PSU,
+         weights=~PERWEIGHT, 
+          strata=~STRATA,
+          nest=TRUE,
+           survey.lonely.psu="adjust",
+           data=data_change)
+
+
+cox_weighted<-svycoxph(Surv(study_exposure, Mort_recode==TRUE) ~ Race + AGE, design = data_weighted)
+
+
+summary(cox_weighted)
+```
+
+```{r, calculating race specific asmr}
+baseline_rate
+baseline_rate_se
+cox_weighted$coefficients
+
+
+
+exp(cox_weighted$coefficients)*baseline_rate
+
+cox_weighted$coefficients["RaceChinese"]
+
+
+
+#Calculating standard error
+```
+
+```{r}
+
+
+cox_weighted
+
+
+SE_cofficients<-data.frame(summary(cox_weighted)$coefficients[,"se(coef)"])%>%
+  slice(1:3)%>%
+  rename(raw_SE=`summary.cox_weighted..coefficients....se.coef...`)
+
+regression_cofficients<-as.data.frame(cox_weighted$coefficients)%>%
+  slice(1:3)#race coefficients
+regression_cofficients
+
+
+Races<-data.frame(Race=c("Chinese", "Filipino","Asian Indian"))
+White<-data.frame(Race="White", `rawcoefficient`=0, raw_SE=0)
+Race_RR<-cbind(Races, regression_cofficients, SE_cofficients)%>%
+  rename(rawcoefficient=`cox_weighted$coefficients`)
+Race_RR<-rbind(Race_RR, White)
+
+
+Overall_Incidence<-Race_RR%>%
+  mutate(HazardRatio=exp(rawcoefficient))%>%
+  mutate(HazardRatio_se=HazardRatio*raw_SE)%>%#propagation of error
+  mutate(Race_Adjusted_Rate=HazardRatio*baseline_rate*100000)%>%#multiplied by 100,000
+  mutate(Race_Adjusted_Rate_Error=Race_Adjusted_Rate*sqrt(#propagation of error
+    (HazardRatio_se/HazardRatio)^2+
+      (baseline_rate_se/baseline_rate)^2
+  ))%>%
+  mutate(lb_95=Race_Adjusted_Rate-qnorm(0.975)*Race_Adjusted_Rate_Error)%>%#used normal distribution rather than t distribution
+  mutate(ub_95=Race_Adjusted_Rate+qnorm(0.975)*Race_Adjusted_Rate_Error)%>%#used normal distribution rather than t distribution
+  mutate(CI_95_per_100000=paste(round(lb_95, 2),"-", round(ub_95, 2)))%>%#2 decimals
+  select(-c(lb_95, ub_95))#removing the lb and ub columns
+
+total_exposure_years
+se_exposure_years
+total_dead
+se_dead
+```
+Diabetes Only
+
+```{r}
+
+data_diabetes<-data%>%
+  filter(Diabetes_Lifetime=="Diabetic")
+
+data_change<-data_diabetes%>%
+  mutate(study_exposure=exposure_birth-AGE)#%>%
+  #filter(!study_exposure==0)%>%
+  #filter(STRATA==5002)%>%
+  #na.omit() #I believe naomitting cause the errors. need to review this and whether it is compatible with our other analysis
+data_weighted_survey<-as_survey(data_change,
+                         id=PSU,
+                         weight=PERWEIGHT,
+                         #strata=STRATA,#Need to remove for diabetes data
+                         nest=TRUE)
+
+
+#THIS STUFF NOT USED FOR ANALYSIS  (MORE FOR LATER INTEREST)
+data_weighted_survey%>%#Calculating the total number of exposure years for each race
+  group_by(Race)%>%
+  summarize(
+    survey_total(study_exposure)
+  )
+
+
+data_weighted_survey%>%#Calculating the number of dead/alive each group race weighted
+  group_by(Race, MORTSTAT)%>%
+  summarize(
+    survey_total()
+  )
+#1 is assumed deceased
+#2 assumed alive
+
+
+
+
+
+#Calculating Baseline Mortality Rate
+
+
+#FOR ANALYSIS
+total_exposure_years_df<-data_weighted_survey%>%#Calculating the total number of exposure years for each race
+  summarize(
+    survey_total(study_exposure)
+  )%>%
+  as.data.frame()
+
+
+total_dead_df<-data_weighted_survey%>%#Calculating the number of dead/alive each group race weighted
+  group_by(MORTSTAT)%>%
+  summarize(
+    survey_total()
+  )%>%
+  as.data.frame()
+#1 is assumed deceased
+#2 assumed alive
+
+
+
+total_exposure_years_df
+total_dead_df
+
+
+total_exposure_years<-total_exposure_years_df[1,1]#Total number of years
+se_exposure_years<-total_exposure_years_df[1,2]#SE of total number of years
+
+total_dead<-total_dead_df[1,2]#Total dead
+se_dead<-total_dead_df[1,3]#SE of total dead
+
+
+total_exposure_years
+se_exposure_years
+total_dead
+se_dead
+
+#propogation of error for baseline (should go back and check the formula)
+
+baseline_rate_se<-(total_dead/total_exposure_years)*
+  sqrt(
+    (se_exposure_years/total_exposure_years)^2+
+      (se_dead/total_dead)^2
+  )
+
+#point estimate baseline
+baseline_rate<-total_dead/total_exposure_years
+
+
+paste("baseline rate:", baseline_rate)
+paste("baseline rate se:", baseline_rate_se)
+
+```
+
+```{r}
+
+
+data_weighted<-svydesign(id=~PSU,
+         weights=~PERWEIGHT, 
+          #strata=~STRATA,#need to remove for diabetes data
+          nest=TRUE,
+          survey.lonely.psu="adjust",
+          data=data_change)
+
+
+cox_weighted<-svycoxph(Surv(study_exposure, Mort_recode==TRUE) ~ Race + AGE, design = data_weighted)
+
+
+summary(cox_weighted)
+```
+
+```{r, calculating race specific asmr}
+baseline_rate
+baseline_rate_se
+cox_weighted$coefficients
+
+
+
+exp(cox_weighted$coefficients)*baseline_rate
+
+cox_weighted$coefficients["RaceChinese"]
+
+
+
+#Calculating standard error
+```
+
+```{r}
+
+
+cox_weighted
+
+
+SE_cofficients<-data.frame(summary(cox_weighted)$coefficients[,"se(coef)"])%>%
+  slice(1:3)%>%
+  rename(raw_SE=`summary.cox_weighted..coefficients....se.coef...`)
+
+regression_cofficients<-as.data.frame(cox_weighted$coefficients)%>%
+  slice(1:3)#race coefficients
+regression_cofficients
+
+
+Races<-data.frame(Race=c("Chinese", "Filipino","Asian Indian"))
+White<-data.frame(Race="White", `rawcoefficient`=0, raw_SE=0)
+Race_RR<-cbind(Races, regression_cofficients, SE_cofficients)%>%
+  rename(rawcoefficient=`cox_weighted$coefficients`)
+Race_RR<-rbind(Race_RR, White)
+
+
+Diabetes_Incidence<-Race_RR%>%
+  mutate(HazardRatio=exp(rawcoefficient))%>%
+  mutate(HazardRatio_se=HazardRatio*raw_SE)%>%#propagation of error
+  mutate(Race_Adjusted_Rate=HazardRatio*baseline_rate*100000)%>%#multiplied by 100,000
+  mutate(Race_Adjusted_Rate_Error=Race_Adjusted_Rate*sqrt(#propagation of error
+    (HazardRatio_se/HazardRatio)^2+
+      (baseline_rate_se/baseline_rate)^2
+  ))%>%
+  mutate(lb_95=Race_Adjusted_Rate-qnorm(0.975)*Race_Adjusted_Rate_Error)%>%#used normal distribution rather than t distribution
+  mutate(ub_95=Race_Adjusted_Rate+qnorm(0.975)*Race_Adjusted_Rate_Error)%>%#used normal distribution rather than t distribution
+  mutate(CI_95_per_100000=paste(round(lb_95, 2),"-", round(ub_95, 2)))%>%#2 decimals
+  select(-c(lb_95, ub_95))#removing the lb and ub columns
+
+total_exposure_years
+se_exposure_years
+total_dead
+se_dead
+```
+
+
+```{r}
+Diabetes_Incidence
+Overall_Incidence
+
+```
+
+
+#Compare: https://www.ahajournals.org/doi/full/10.1161/CIRCULATIONAHA.122.059174 (Possibly cite)
+https://www.ahajournals.org/doi/10.1161/CIR.0000000000001278
