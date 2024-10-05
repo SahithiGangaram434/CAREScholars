@@ -59,6 +59,7 @@ cox_unweighted_diabetic<-coxph(Surv(AGE, exposure_birth, Mort_recode) ~ Race + s
 plot(survfit(cox_unweighted_diabetic), col=1:2)
 legend("bottomleft", legend=levels(data_2$Diabetes_Lifetime), col=1:2, lty=1)
 
+
 ```
 
 ```{r}

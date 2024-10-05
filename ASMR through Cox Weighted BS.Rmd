@@ -230,6 +230,7 @@ data_weighted_survey<-as_survey(data_change,
                          nest=TRUE)
 
 
+
 table_1_weight_quant<-function(dataset, variable){
   
   variable_string_name <- deparse(substitute(variable))
