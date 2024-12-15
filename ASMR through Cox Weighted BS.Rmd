@@ -580,3 +580,98 @@ Overall_Incidence
 
 #Compare: https://www.ahajournals.org/doi/full/10.1161/CIRCULATIONAHA.122.059174 (Possibly cite)
 https://www.ahajournals.org/doi/10.1161/CIR.0000000000001278
+
+
+
+
+```{r, troubleshooting}
+
+head(data)
+
+data_diabetes<-data%>%
+  filter(Diabetes_Lifetime=="Diabetic")
+
+data_change<-data_diabetes%>%
+  mutate(study_exposure=exposure_birth-AGE)#%>%
+  #filter(!study_exposure==0)%>%
+  #filter(STRATA==5002)%>%
+  #na.omit() #I believe naomitting cause the errors. need to review this and whether it is compatible with our other analysis
+
+
+data_weighted_survey<-as_survey(data_change,
+                         id=PSU,
+                         weight=PERWEIGHT,
+                         #strata=STRATA,#Need to remove for diabetes data
+                         nest=TRUE)
+
+
+
+
+
+#Calculating Baseline Mortality Rate
+
+
+data_change%>%
+  summarize(
+    sum(study_exposure)
+  )
+
+
+#FOR ANALYSIS
+total_exposure_years_df<-data_weighted_survey%>%#Calculating the total number of exposure years for each race
+  summarize(
+    survey_total(study_exposure)
+  )%>%
+  as.data.frame()
+
+
+total_dead_df<-data_weighted_survey%>%#Calculating the number of dead/alive each group race weighted
+  group_by(MORTSTAT)%>%
+  summarize(
+    survey_total()
+  )%>%
+  as.data.frame()
+#1 is assumed deceased
+#2 assumed alive
+
+total_exposure_years_df
+total_dead_df
+
+
+data_weighted_survey%>%#Calculating the total number of exposure years for each race
+  summarize(
+    survey_mean(study_exposure)
+  )%>%
+  as.data.frame()
+
+data_weighted_survey%>%#Calculating the number of dead/alive each group race weighted
+  group_by(MORTSTAT)%>%
+  summarize(
+    survey_mean()
+  )
+
+data_weighted_survey%>%#Calculating the number of dead/alive each group race weighted
+  summarize(
+    survey_mean(AGE)
+  )
+
+
+
+(0.3993732/7.700017)*100000
+
+
+#Attempting to adjust for age
+1.0943#exp(age coef) from total population
+
+#Mean Age Diabetics 62.98871
+#Mean Age Diabetic Population 49.34254	
+62.98871-49.34254#difference in age 13.64617
+
+
+13.64617*1.0943#Increase in hazard from difference in population
+
+
+(0.3993732/7.700017)*100000/14.933
+
+347.3283 #ASMR of diabetes adjusted to average age of total population
+```
