@@ -1,0 +1,189 @@
+---
+title: "Age Standardized Mortality Dec 24"
+author: "Ben Szeto"
+date: "2024-12-03"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, loading libraries}
+
+library(tidyverse)
+library(survival)
+library(surveil)
+```
+
+```{r}
+data_asmr<-data%>%
+  # filter(!EDUCREC2==0)%>%#Ask the group about this. The results change when removing missing values
+  # filter(!Earnings_recode=="NIU/Unknown")%>%
+  select(exposure_birth, Mort_recode, Race, AGE, sex, Diabetes_Lifetime_Race, Diabetes_Lifetime, BMI_R_Cat, Education_recode, Earnings_recode, Smoking_recode, Insurance_Status, USBorn_Recode, PERWEIGHT, PSU, STRATA, Diabetes_Over_Race, YEAR)%>%
+  mutate(study_exposure=exposure_birth-AGE)%>%
+  filter(!study_exposure==0)%>%
+  na.omit()
+```
+
+
+
+```{r, creating age cutoffs}
+
+data_asmr<-data_asmr%>%
+  mutate(Age1997=AGE-YEAR+1997)%>% #would need to go back and fix the rest of data because this would change the population....(unless we just switch to age...)
+  filter(Age1997>=0)%>%#Removing anyone who wasnt alive in 1997 Should I also remove people who were 0?
+  mutate(AgeGroup=factor(case_when(
+    Age1997%in%c(0)~"<1",
+    Age1997%in%c(1:4)~"1-4",
+    Age1997%in%c(5:9)~"5-9",
+    Age1997%in%c(10:14)~"10-14",
+    Age1997%in%c(15:19)~"15-19",
+    Age1997%in%c(20:24)~"20-24",
+    Age1997%in%c(25:29)~"25-29",
+    Age1997%in%c(30:34)~"30-34",
+    Age1997%in%c(35:39)~"35-39",
+    Age1997%in%c(40:44)~"40-44",
+    Age1997%in%c(45:49)~"45-49",
+    Age1997%in%c(50:54)~"50-54",
+    Age1997%in%c(55:59)~"55-59",
+    Age1997%in%c(60:64)~"60-64",
+    Age1997%in%c(65:69)~"65-69",
+    Age1997%in%c(70:74)~"70-74",
+    Age1997%in%c(75:79)~"75-79",
+    Age1997%in%c(80:84)~"80-84",
+    Age1997>=85~"85+",
+    TRUE~"Check")))%>%
+  mutate(AGE=as.numeric(AGE))
+
+
+data_asmr%>% #counting number of each group
+  group_by(Race)%>%
+  count(AgeGroup)
+```
+
+
+```{r}
+
+#try poisson regresison, follup time is the offset
+
+cox_model_uw<-coxph(Surv(study_exposure, Mort_recode==TRUE) ~ Race+AGE, data = data_asmr) #Add + Diabetes_Lifetime:Race?
+summary(cox_model_uw)
+```
+
+```{r, calculating baseline hazard}
+
+#Predicting baseline hazard for each race
+data_asmr<-data_asmr%>%
+  mutate(predicted_hazard=predict(cox_model_uw))
+
+```
+
+
+
+```{r, calculating mortality rates by age group and race}
+
+MR_Race_Age<-data_asmr%>%
+  group_by(AgeGroup, Race)%>%
+  summarize(
+    mortality_rate=mean(predicted_hazard),
+    count=n()
+  )
+
+MR_Race_Age
+
+```
+
+
+```{r, reference population census 2000}
+
+Census_2000<-surveil::standard%>%#2000 census population from the surveil package. Need to review what the denominator is? The Shah paper used the 2000 census
+  mutate(AgeGroup=factor(age))
+
+Census_2000<-Census_2000%>%
+  mutate(AgeProp=standard_pop/sum(standard_pop))
+
+Census_2000
+
+#Merging with dataset
+
+MR_Race_Age_Prop<-left_join(MR_Race_Age, Census_2000, by="AgeGroup")
+
+
+```
+
+
+```{r}
+
+MR_Race_Age_Prop%>%
+  mutate(mortality_rate_2=ifelse(mortality_rate<=0, 0, mortality_rate))%>%#getting the entire period?
+  group_by(Race)%>%
+  summarize(
+    ASMR_Race=sum(mortality_rate*AgeProp),
+    ASMR_Race_2=sum(mortality_rate_2*AgeProp)
+    )%>%
+  mutate(ASMR_Race_Exp=exp(ASMR_Race))#Seems to high
+```
+
+#Talk to Dr Bacong about this
+
+
+
+```{r}
+
+MR_Race_Age%>%#Seems too high
+  arrange(Race)
+
+```
+
+
+
+
+USING POISSON REGRESSION
+
+
+
+```{r}
+library(tidyverse)
+library(survey)
+library(margins)
+```
+
+
+```{r}
+data_2<-data%>%
+   mutate(study_exposure=exposure_birth-AGE)%>%
+  select(Mort_recode,Race, AGE, PERWEIGHT, STRATA, PSU, study_exposure)%>%
+  mutate(Mort_recode_01=ifelse(Mort_recode==TRUE, 1, 0))%>%
+  filter(study_exposure>0)%>%
+  na.omit()
+data_weighted_svyr<-svydesign(id=~PSU,
+          weights=~PERWEIGHT,
+          strata=~STRATA,
+          nest=TRUE,
+          survey.lonely.psu="adjust",
+          data=data_2)
+```
+
+```{r, poission regression}
+model_poisson_asmr <- svyglm(Mort_recode ~ Race + AGE, design=data_weighted_svyr, family =poisson(),offset = log(study_exposure))#Which exposure should I use for offset?
+
+
+summary(model_poisson_asmr)
+```
+
+
+```{r}
+exp(coef(model_poisson_asmr))
+
+```
+
+```{r}
+margins(model_poisson_asmr, at=list(Race=c("White", "Chinese", "Filipino", "Asian Indian")), type="response")#was confused by this code
+
+
+margins<-margins(model_poisson_asmr, type="response")#raise these values to exp?
+
+
+margins
+```

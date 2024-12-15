@@ -34,6 +34,7 @@ data3 <- read_ipums_micro(ddi)
 
 ```{r Ben Mac Path}
 
+
 # ddi <- read_ipums_ddi("/Users/benszeto/Library/CloudStorage/Box-Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00029.xml")
 # 
 # data1 <- read_ipums_micro(ddi)

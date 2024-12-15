@@ -59,6 +59,7 @@ cox_unweighted_diabetic<-coxph(Surv(AGE, exposure_birth, Mort_recode) ~ Race + s
 plot(survfit(cox_unweighted_diabetic), col=1:2)
 legend("bottomleft", legend=levels(data_2$Diabetes_Lifetime), col=1:2, lty=1)
 
+
 ```
 
 ```{r}
@@ -487,7 +488,7 @@ plot(survfit(cox_mod3), xlab="Years",ylab="Proportion Alive", ylim=c(0,1), xlim=
 legend("bottomleft", legend=levels(data_practice$Diabetes_Over_Race), col=1:4, lty=c(1,1,1,1,2,2,2,2))
 
 
-cox_mod3<-coxph(Surv(AGE, exposure_birth, Mort_recode) ~ Race + sex+ Diabetes_Lifetime+BMI_R_Cat+Education_recode+Earnings_recode+Smoking_recode+USBorn_Recode, data = data_2)
+cox_mod3<-coxph(Surv(AGE, exposure_birth, Mort_recode) ~ Diabetes_Over_Race + sex+BMI_R_Cat+Education_recode+Earnings_recode+Smoking_recode+USBorn_Recode, data = data_practice)
 
 summary(cox_mod3)
 ```
@@ -652,3 +653,24 @@ forest_plot_manual
 
 
 ```
+USE THIS DEC 2024
+
+```{r, Diabetes regression using interaction term for each race going to multiply out to get cox}
+
+
+data_weighted<-survey::svydesign(id=~PSU,
+          weights=~PERWEIGHT,
+          strata=~STRATA,
+          nest=TRUE,
+          survey.lonely.psu="adjust",
+          data=data_2)
+
+cox_weighted<-svycoxph(Surv(study_exposure, Mort_recode==TRUE) ~ Race + AGE+Diabetes_Lifetime+Diabetes_Lifetime*Race+ sex+ BMI_R_Cat+Education_recode+Earnings_recode+Smoking_recode+Insurance_Status+USBorn_Recode, design = data_weighted)
+
+summary(cox_weighted)
+
+
+```
+
+
+https://docs.google.com/spreadsheets/d/1wbGTrBRq2qfoicrLrWPDITRiz9tIWdrUi1_QfkEeBJo/edit?gid=0#gid=0

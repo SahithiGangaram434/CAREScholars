@@ -78,15 +78,22 @@ table_1_weight_cat(data_weighted_survey, HYPERTENEV_recode) #This isnt working f
 table_1_weight_cat(data_weighted_survey, Mortality_Status)
 
 table_1_weight_cat(data_weighted_survey, Smoking_recode)
-table_1_weight_cat(data_weighted_survey, Smoking)
+table_1_weight_cat(data_weighted_survey, Smoking_recode)
 table_1_weight_cat(data_weighted_survey, Diabetes_Lifetime)
 table_1_weight_cat(data_weighted_survey, DIABETICEV)
+table_1_weight_cat(data_weighted_survey, HighSchool_and_above)
+
+
+
 
 ```
 
 ```{r, quant variables}
 
 table_1_weight_quant(data_weighted_survey, AGE)
+
+
+table_1_weight_quant(data_weighted_survey, Age_Diabetes_Diagnosis)
 
 ```
 
@@ -102,3 +109,9 @@ data%>%
 
 ```
 
+
+```{r}
+data%>%
+  group_by(Race)%>%
+  count()
+```

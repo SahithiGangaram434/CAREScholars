@@ -1,0 +1,88 @@
+---
+title: "9/11/24 Meeting Code DELETE LATER"
+author: "Ben Szeto"
+date: "2024-09-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, libaries}
+
+library(tidyverse)
+library(srvyr)
+library(survey)
+library(survival)
+```
+R documentation for the survey package: https://cran.r-project.org/web/packages/survey/survey.pdf
+
+```{r, data for analysis}
+#Removing missing values from selected columns
+data_naomit<-data%>%
+  mutate(study_exposure=exposure_birth-AGE)%>%#Move this the data_clean RMD eventually
+  filter(!study_exposure==0)%>%#Removing people with 0 exposure time
+  select(Race, Mort_recode, study_exposure, AGE,#Selected columns
+         PSU, STRATA, PERWEIGHT)%>%#columns for data weighting
+  na.omit()
+
+
+#Weighting the data
+
+data_weighted<-svydesign(id=~PSU,
+          weights=~PERWEIGHT,
+          strata=~STRATA,
+          nest=TRUE,
+          survey.lonely.psu="adjust",
+          data=data_naomit)
+
+```
+
+
+```{r, based on Dr Bacong from example 1}
+
+table(data_naomit$Mort_recode)
+
+
+TRUE_count<-sum(data_naomit$Mort_recode==TRUE)
+#FALSE_count<-sum(data_naomit$Mort_recode==FALSE)
+Total_count<-nrow(data_naomit)
+
+baseline_incidence_rate<-TRUE_count/Total_count
+
+baseline_incidence_rate
+
+
+
+#baseline_incidence_rate<-100#Placeholder (need to figure out how to do with weighted regression)
+data_naomit<-data_naomit%>%
+  mutate(AGE=as.numeric(AGE))
+cox_unweighted<-coxph(Surv(study_exposure, Mort_recode==TRUE) ~ Race + AGE, data = data_naomit)
+AGE_HR<-exp(cox_unweighted$coefficients["AGE"])
+Races<-c("White", "Chinese", "Asian Indian", "Filipino")
+age_adjusted_incidence_rates <- numeric(length(Races)) #Used later when references i
+
+for (i in 1:length(Races)) {
+  race_specific_data <- subset(data_naomit, Race == Races[i])
+  race_age_adjusted_incidence_rate <- baseline_incidence_rate * AGE_HR^mean(race_specific_data$AGE - mean(data_naomit$AGE))
+  age_adjusted_incidence_rates[i] <- race_age_adjusted_incidence_rate
+}
+
+
+age_adjusted_incidence_rates
+#is this even doing anything with race or is it simply calculating hazard ratios by considering differences in age?
+```
+
+
+
+Run regression with race, age, 
+
+
+baseline rate is rate for everyone(regardless of race)
+
+
+Gather hazard ratios by race (and 95% CI)--> multiply hazard ratios by baseline incidence rate
+
+baseline*race hazard--> race specific incidence rate (convert to 100,000 or whatever as rate (whatever makes sense))

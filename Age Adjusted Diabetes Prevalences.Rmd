@@ -1,0 +1,103 @@
+---
+title: "Age Adjusted Diabetes Prevalence"
+author: "Ben Szeto"
+date: "2024-12-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+
+```
+
+
+```{r, take data in}
+data_age_diabetes<-data
+
+```
+
+```{r}
+data_age_diabetes<-data_age_diabetes%>%
+  mutate(AgeGroup=factor(case_when(
+    AGE%in%c(0)~"<1",
+    AGE%in%c(1:4)~"1-4",
+    AGE%in%c(5:9)~"5-9",
+    AGE%in%c(10:14)~"10-14",
+    AGE%in%c(15:19)~"15-19",
+    AGE%in%c(20:24)~"20-24",
+    AGE%in%c(25:29)~"25-29",
+    AGE%in%c(30:34)~"30-34",
+    AGE%in%c(35:39)~"35-39",
+    AGE%in%c(40:44)~"40-44",
+    AGE%in%c(45:49)~"45-49",
+    AGE%in%c(50:54)~"50-54",
+    AGE%in%c(55:59)~"55-59",
+    AGE%in%c(60:64)~"60-64",
+    AGE%in%c(65:69)~"65-69",
+    AGE%in%c(70:74)~"70-74",
+    AGE%in%c(75:79)~"75-79",
+    AGE%in%c(80:84)~"80-84",
+    AGE>=85~"85+",
+    TRUE~"Check")))
+
+
+data_age_diabetes%>% #counting number of each group
+  group_by(Race)%>%
+  count(AgeGroup)
+
+```
+
+```{r}
+data_age_diabetes_w<-as_survey(data_age_diabetes,
+                         id=PSU,
+                         weight=PERWEIGHT,
+                         strata=STRATA,
+                         nest=TRUE)
+
+
+
+Prevalences_Diabetes_Race_Age<-data_age_diabetes_w%>%
+  group_by(Race,AgeGroup, Diabetes_Lifetime)%>%
+  summarize(
+    survey_mean()
+  )%>%
+  filter(Diabetes_Lifetime=="Diabetic")%>%
+  arrange(Race,AgeGroup)
+
+```
+
+
+```{r}
+Census_2000<-surveil::standard%>%#2000 census population from the surveil package. Need to review what the denominator is? The Shah paper used the 2000 census
+  mutate(AgeGroup=factor(age))
+
+Census_2000<-Census_2000%>%
+  mutate(AgeProp=standard_pop/sum(standard_pop))
+
+Census_2000
+
+#Merging with dataset
+
+Diabetes_Race_Age_Prop<-left_join(Prevalences_Diabetes_Race_Age, Census_2000, by="AgeGroup")
+
+```
+
+```{r}
+
+Diabetes_Race_Age_Prop
+
+
+Diabetes_Race_Age_Prop%>%
+  #mutate(mortality_rate_2=ifelse(mortality_rate<=0, 0, mortality_rate))%>%#getting the entire period?
+  group_by(Race)%>%
+  summarize(
+    Diabetes_Race=sum(coef*AgeProp),
+    Diabetes_Race_SE=sqrt(sum((coef*AgeProp)^2))#Not sure if this is correct
+    )%>%
+  mutate(lower_bound=Diabetes_Race-1.96*Diabetes_Race_SE)%>%
+  mutate(upper_bound=Diabetes_Race+1.96*Diabetes_Race_SE)
+```

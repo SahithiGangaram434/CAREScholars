@@ -1,0 +1,109 @@
+---
+title: "Forrest Plots for Manuscript"
+author: "Ben Szeto"
+date: "2024-11-15"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(tidyverse)
+
+
+```
+
+
+```{r, forrest plot for individuals Total Population}
+
+data_forest<-data.frame(
+  Variable=c("Non-Hispanic White\n(Reference)", "Chinese", "Filipino", "Asian Indian"),
+  Point_Estimate=c(1, 0.7188, 0.7763, 0.6575),
+  Lower_Bound=c(1, 0.6227, 0.6874, 0.5305),
+  Upper_Bound=c(1,0.8297, 0.8767, 0.8150)
+)%>%
+  mutate(Variable=factor(Variable, c("Asian Indian", "Filipino", "Chinese","Non-Hispanic White\n(Reference)")))
+
+
+forest_plot_manual<-data_forest%>%
+  ggplot(aes(y=Variable, x=Point_Estimate, xmin=Lower_Bound, xmax=Upper_Bound))+
+  geom_point()+
+  geom_errorbarh(height=0.2)+
+  labs(x="Hazard Ratio", y="", title="Hazard Ratios for Asian Subgroups With Diabetes")+
+  #scale_x_log10()+#do I need to make log scale?
+  xlim(0,1.1)+
+  geom_vline(xintercept=1, lty=2)+
+  theme_minimal()+
+  theme(axis.text=element_text(size=15))
+
+
+forest_plot_manual
+
+
+
+
+
+
+```
+
+
+```{r, forest plot for total Population (added hazard ratios)}
+
+data_forest<-data.frame(
+  Variable=c("Non-Hispanic White\n(Reference)", "Chinese\n0.7188 [0.6227, 0.8297]", "Filipino\n0.7763 [0.6874, 0.8767]", "Asian Indian\n0.6575 [0.5305, 0.8150]"),
+  Point_Estimate=c(1, 0.7188, 0.7763, 0.6575),
+  Lower_Bound=c(1, 0.6227, 0.6874, 0.5305),
+  Upper_Bound=c(1,0.8297, 0.8767, 0.8150)
+)%>%
+  mutate(Variable=factor(Variable, c("Asian Indian\n0.6575 [0.5305, 0.8150]", "Filipino\n0.7763 [0.6874, 0.8767]", "Chinese\n0.7188 [0.6227, 0.8297]","Non-Hispanic White\n(Reference)")))
+
+
+forest_plot_manual<-data_forest%>%
+  ggplot(aes(y=Variable, x=Point_Estimate, xmin=Lower_Bound, xmax=Upper_Bound))+
+  geom_point()+
+  geom_errorbarh(height=0.2)+
+  labs(x="Hazard Ratio", y="", title="Hazard Ratios for Asian Subgroups Total Population")+
+  #scale_x_log10()+#do I need to make log scale?
+  geom_vline(xintercept=1, lty=2)+
+  theme_minimal()+
+  theme(axis.text=element_text(size=12), axis.text.y=element_text(colour="black"))+
+  scale_x_continuous(breaks=seq(0,1,by=0.2), limits=c(0,1))
+
+
+
+forest_plot_manual
+
+```
+
+
+```{r}
+
+
+data_forest<-data.frame(
+  Variable=c("NHW\n (Reference)", "Chinese", "Asian Indian", "Filipino", " ", "NHW Diabetes", "Chinese Diabetes", "Asian Indian Diabetes", "Filipino Diabetes"),
+  Point_Estimate=c(1, 0.685862300, 0.592975260, 0.769339826, NA, 1.88086861, 1.6138903, 1.428759235, 1.494021085 ),
+  Lower_Bound=c(1, 0.5880577655, 0.443903636,0.6661559135,NA , 1.843315293, 1.087904802, 0.6747849094, 1.072450859),
+  Upper_Bound=c(1,0.783666834, 0.7420468847,0.8725237396, NA, 1.918421939 , 2.13987579, 2.182733561, 1.915591312)
+)%>%
+  mutate(Variable=factor(Variable, c("Filipino Diabetes", "Asian Indian Diabetes","Chinese Diabetes","NHW Diabetes",  " ",  "Filipino", "Asian Indian", "Chinese","NHW\n (Reference)")))
+
+
+forest_plot_manual<-data_forest%>%
+  ggplot(aes(y=Variable, x=Point_Estimate, xmin=Lower_Bound, xmax=Upper_Bound))+
+  geom_point()+
+  geom_errorbarh(height=0.2)+
+  labs(x="Hazard Ratio", y="", title="Hazard Ratios for Asian Subgroups\nwith and without Diabetes")+
+  #scale_x_log10()+#do I need to make log scale?
+  xlim(0,3)+
+  geom_vline(xintercept=1, lty=2)+
+  theme_minimal()+
+  theme(axis.text=element_text(size=15))
+
+
+forest_plot_manual
+
+```
+

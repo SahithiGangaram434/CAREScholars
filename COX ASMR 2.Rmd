@@ -1,0 +1,36 @@
+---
+title: "ASMR COX Nov 2024"
+author: "Ben Szeto"
+date: "2024-11-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, libaries}
+
+library(tidyverse)
+library(srvyr)
+library(survey)
+library(survival)
+```
+
+
+```{r}
+
+data_weighted<-svydesign(id=~PSU,
+         weights=~PERWEIGHT, 
+          strata=~STRATA,
+          nest=TRUE,
+          survey.lonely.psu="adjust",
+          data=data_change)
+
+
+cox_weighted<-svycoxph(Surv(study_exposure, Mort_recode==TRUE) ~ Race + Diabetes_Lifetime:Race+AGE, design = data_weighted)
+
+basehaz(cox_weighted, centered=FALSE)
+
+summary(cox_weighted)
+```
