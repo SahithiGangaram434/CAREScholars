@@ -106,4 +106,86 @@ forest_plot_manual<-data_forest%>%
 forest_plot_manual
 
 ```
+```{r, w nativity}
 
+data_forest<-data.frame(
+  Variable=c("Non-Hispanic White\n(Reference)", "Chinese\n0.83 [0.61, 1.13]", "Filipino\n0.85 [0.66, 1.10]", "Asian Indian\n0.80 [0.67, 0.94]"),
+  Point_Estimate=c(1, 0.83, 0.85, 0.80),
+  Lower_Bound=c(1, 0.61, 0.66, 0.67),
+  Upper_Bound=c(1,1.13, 1.10, 0.94)
+)%>%
+  mutate(Variable=factor(Variable, c("Asian Indian\n0.80 [0.67, 0.94]", "Filipino\n0.85 [0.66, 1.10]", "Chinese\n0.83 [0.61, 1.13]","Non-Hispanic White\n(Reference)")))
+
+
+forest_plot_manual<-data_forest%>%
+  ggplot(aes(y=Variable, x=Point_Estimate, xmin=Lower_Bound, xmax=Upper_Bound))+
+  geom_point()+
+  geom_errorbarh(height=0.2)+
+  labs(x="Hazard Ratio", y="", title="Hazard Ratios for Asian subgroups\nIncluding Nativity")+
+  #scale_x_log10()+#do I need to make log scale?
+  geom_vline(xintercept=1, lty=2)+
+  theme_minimal()+
+  theme(axis.text=element_text(size=12), axis.text.y=element_text(colour="black"))+
+  scale_x_continuous(breaks=seq(0,1,by=0.25), limits=c(0,1.25))
+
+
+
+forest_plot_manual
+
+```
+
+
+```{r, nativity status}
+data_forest<-data.frame(
+  Variable=c("Born in US\n(Reference)", "Born Outside US\n0.81 [0.74, 0.89]"),
+  Point_Estimate=c(1, 0.81),
+  Lower_Bound=c(1, 0.74),
+  Upper_Bound=c(1,0.89)
+)%>%
+  mutate(Variable=factor(Variable, c("Born Outside US\n0.81 [0.74, 0.89]", "Born in US\n(Reference)")))
+
+
+forest_plot_manual<-data_forest%>%
+  ggplot(aes(y=Variable, x=Point_Estimate, xmin=Lower_Bound, xmax=Upper_Bound))+
+  geom_point()+
+  geom_errorbarh(height=0.2)+
+  labs(x="Hazard Ratio", y="", title="Hazard Ratios by Nativity Status")+
+  #scale_x_log10()+#do I need to make log scale?
+  geom_vline(xintercept=1, lty=2)+
+  theme_minimal()+
+  theme(axis.text=element_text(size=12), axis.text.y=element_text(colour="black"))+
+  scale_x_continuous(breaks=seq(0,1,by=0.25), limits=c(0,1.25))
+
+
+
+forest_plot_manual
+
+```
+
+```{r, w/o nativity}
+
+data_forest<-data.frame(
+  Variable=c("Non-Hispanic White\n(Reference)", "Chinese\n0.71 [0.54, 0.94]", "Filipino\n0.74  [0.58, 0.93]", "Asian Indian\n0.65 [0.51, 0.84]"),
+  Point_Estimate=c(1, 0.71, 0.74, 0.65),
+  Lower_Bound=c(1, 0.54, 0.58, 0.51),
+  Upper_Bound=c(1,0.94, 0.93, 0.84)
+)%>%
+  mutate(Variable=factor(Variable, c("Asian Indian\n0.65 [0.51, 0.84]", "Filipino\n0.74  [0.58, 0.93]", "Chinese\n0.71 [0.54, 0.94]","Non-Hispanic White\n(Reference)")))
+
+
+forest_plot_manual<-data_forest%>%
+  ggplot(aes(y=Variable, x=Point_Estimate, xmin=Lower_Bound, xmax=Upper_Bound))+
+  geom_point()+
+  geom_errorbarh(height=0.2)+
+  labs(x="Hazard Ratio", y="", title="Hazard Ratios for Asian subgroups\nOmitting Nativity")+
+  #scale_x_log10()+#do I need to make log scale?
+  geom_vline(xintercept=1, lty=2)+
+  theme_minimal()+
+  theme(axis.text=element_text(size=12), axis.text.y=element_text(colour="black"))+
+  scale_x_continuous(breaks=seq(0,1,by=0.25), limits=c(0,1.25))
+
+
+
+forest_plot_manual
+
+```

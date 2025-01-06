@@ -78,18 +78,18 @@ data<-data%>%
 ```
 
 
-```{r}
-data%>%
-  group_by(Race, Diabetes_Lifetime, Mort_recode)%>%
-  count()
-
-data%>%
-  select(Diabetes_Lifetime, DIABETICEV, MORTDIAB)%>%
-  filter(is.na(Diabetes_Lifetime))
-
-unique(data$DIABETICEV)
-unique(data$MORTDIAB)
-```
+# ```{r}
+# data%>%
+#   group_by(Race, Diabetes_Lifetime, Mort_recode)%>%
+#   count()
+# 
+# data%>%
+#   select(Diabetes_Lifetime, DIABETICEV, MORTDIAB)%>%
+#   filter(is.na(Diabetes_Lifetime))
+# 
+# unique(data$DIABETICEV)
+# unique(data$MORTDIAB)
+# ```
 
 ```{r, data filtering}
 data<-data%>%
@@ -335,16 +335,26 @@ data_weighted<-survey::svydesign(id=~PSU,
           survey.lonely.psu="adjust",
           data=data_analysis_diabetes)
 
-cox_weighted_diabetes<-svycoxph(Surv(study_exposure, Mort_recode==TRUE) ~ Race + AGE+ sex+ Education_recode+Earnings_recode+Smoking_recode+Insurance_Status+BMI_R_Cat+USBorn_Recode, design = data_weighted)#Remove foreign born and asians lower risk
+cox_weighted_diabetes_w_nativity<-svycoxph(Surv(study_exposure, Mort_recode==TRUE) ~ Race + AGE+ sex+ Education_recode+Earnings_recode+Smoking_recode+Insurance_Status+BMI_R_Cat+USBorn_Recode, design = data_weighted)#Remove foreign born and asians lower risk
 
+
+cox_weighted_diabetes<-svycoxph(Surv(study_exposure, Mort_recode==TRUE) ~ Race + AGE+ sex+ Education_recode+Earnings_recode+Smoking_recode+Insurance_Status+BMI_R_Cat, design = data_weighted)#Remove foreign born and asians lower risk
 
 
 summary(cox_weighted_diabetes)
+summary(cox_weighted_diabetes_w_nativity)
 
 car::vif(cox_weighted_diabetes)
 ```
 
+```{r}
+data%>%
+  group_by(Mort_recode, Diabetes_Lifetime)%>%
+  count()
 
+
+
+```
 
 
 Trying to figure out how to do with MICE
