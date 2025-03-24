@@ -96,8 +96,14 @@ Diabetes_Race_Age_Prop%>%
   group_by(Race)%>%
   summarize(
     Diabetes_Race=sum(coef*AgeProp),
-    Diabetes_Race_SE=sqrt(sum((coef*AgeProp)^2))#Not sure if this is correct
+    Diabetes_Race_SE=
+      sum(
+      sqrt(
+      (`_se`*AgeProp)^2)
+      )
     )%>%
-  mutate(lower_bound=Diabetes_Race-1.96*Diabetes_Race_SE)%>%
-  mutate(upper_bound=Diabetes_Race+1.96*Diabetes_Race_SE)
+  mutate(Diabetes_Race=Diabetes_Race*100)%>%
+  mutate(lower_bound=Diabetes_Race-1.96*Diabetes_Race_SE*100)%>%
+  mutate(upper_bound=Diabetes_Race+1.96*Diabetes_Race_SE*100)%>%
+  mutate(point_95CI=paste0(round(Diabetes_Race,2), " (", round(lower_bound,2), ", ", round(upper_bound,2), ")"))
 ```

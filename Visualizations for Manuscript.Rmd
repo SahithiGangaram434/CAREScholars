@@ -189,3 +189,32 @@ forest_plot_manual<-data_forest%>%
 forest_plot_manual
 
 ```
+
+
+```{r, visualizations for poster}
+
+data_forest<-data.frame(
+  Variable=c("Low Income ($1-$34,999)\n1.20(1.00, 1.44)", "Middle Income ($35,000-$74,999)\n(Reference)", "High Income (>$75,000)\n0.88 (0.76, 1.01)", "Did Not Complete High School\n1.15 (1.09, 1.20)", "High School\n(Reference)", "Some College\n1.00 (0.97, 1.02)", "4 Year College/Bachelor’s Degree\n0.88 (0.81, 0.95)", "Post Bachelor\n0.84 (0.82, 0.86)", "Insured\n(Reference)", "Uninsured\n1.17 (1.04, 1.31)"),
+  Point_Estimate=c(1.20, 1, 0.88, 1.15, 1, 1.00, 0.88, 0.84, 1, 1.17),
+  Lower_Bound=c(1.00,1.00, 0.76, 1.09, 1, 0.97, 0.81, 0.82, 1, 1.04),
+  Upper_Bound=c(1.44,1.00, 1.01, 1.20, 1, 1.02, 0.95, 0.86, 1, 1.31)
+)%>%
+  mutate(Variable=factor(Variable, c("Uninsured\n1.17 (1.04, 1.31)", "Insured\n(Reference)", "Post Bachelor\n0.84 (0.82, 0.86)",  "4 Year College/Bachelor’s Degree\n0.88 (0.81, 0.95)","Some College\n1.00 (0.97, 1.02)", "High School\n(Reference)", "Did Not Complete High School\n1.15 (1.09, 1.20)",  "High Income (>$75,000)\n0.88 (0.76, 1.01)", "Middle Income ($35,000-$74,999)\n(Reference)","Low Income ($1-$34,999)\n1.20(1.00, 1.44)")))
+
+
+forest_plot_manual<-data_forest%>%
+  ggplot(aes(y=Variable, x=Point_Estimate, xmin=Lower_Bound, xmax=Upper_Bound))+
+  geom_point()+
+  geom_errorbarh(height=0.2)+
+  labs(x="Hazard Ratio", y="", title="Risk of Mortality by Income, Education, and Nativity")+
+  #scale_x_log10()+#do I need to make log scale?
+  geom_vline(xintercept=1, lty=2)+
+  theme_minimal()+
+  theme(axis.text=element_text(size=12), axis.text.y=element_text(colour="black"))+
+  scale_x_continuous(breaks=seq(0,1.5,by=0.25), limits=c(0.5,1.5))
+
+
+
+forest_plot_manual
+
+```

@@ -83,7 +83,7 @@ table_1_weight_cat(data_weighted_survey, Diabetes_Lifetime)
 table_1_weight_cat(data_weighted_survey, DIABETICEV)
 table_1_weight_cat(data_weighted_survey, HighSchool_and_above)
 
-
+table_1_weight_cat(data_weighted_survey, Diabetes_Lifetime)
 
 
 ```
@@ -114,4 +114,80 @@ data%>%
 data%>%
   group_by(Race)%>%
   count()
+```
+
+
+
+#March 2025
+```{r, new table 1 function}
+
+
+
+table_1_weight_cat<-function(dataset, variable){
+  
+  variable_string_name <- deparse(substitute(variable))
+  column_name<- paste(variable_string_name, "_point_int")
+  
+  dataset%>%
+  group_by(Race,{{variable}}) %>%
+  summarize(
+    survey_mean()
+  )%>%
+  mutate(coef=coef*100)%>%
+  mutate(`_se`=`_se`*100)%>%
+  mutate(t_val=1.96)%>%#Using a fixed t-value of 1.96
+  mutate(lower_bound=coef-t_val*`_se`)%>%
+  mutate(upper_bound=coef+t_val*`_se`)
+}
+
+
+#fix this later
+table_1_weight_quant<-function(dataset, variable){
+  
+  variable_string_name <- deparse(substitute(variable))
+  column_name<- paste(variable_string_name, "_point_int")
+  
+  dataset%>%
+  group_by(Race) %>%
+  summarize(
+    survey_mean({{variable}})
+  )%>%
+  mutate(t_val=1.96)%>%#Using a fixed t-value of 1.96
+  mutate(lower_bound=coef-t_val*`_se`)%>%
+  mutate(upper_bound=coef+t_val*`_se`)%>%
+  mutate(!!column_name :=  paste0(round(coef, 1), ", (", round(lower_bound, 1), "-", round(upper_bound, 1), ")")) %>%
+    select(Race,!!column_name)
+  #Maybe try to rotate
+}
+
+
+```
+
+
+```{r}
+
+table_1_weight_cat(data_weighted_survey, Education_recode)
+table_1_weight_cat(data_weighted_survey, sex)
+table_1_weight_cat(data_weighted_survey, Earnings_recode)
+table_1_weight_cat(data_weighted_survey, Insurance_Status)
+table_1_weight_cat(data_weighted_survey, USBorn_Recode)
+table_1_weight_cat(data_weighted_survey, BMI_R_Cat)
+table_1_weight_cat(data_weighted_survey, HYPERTENEV_recode) #This isnt working for some reason
+table_1_weight_cat(data_weighted_survey, Mortality_Status)
+
+table_1_weight_cat(data_weighted_survey, Smoking_recode)
+table_1_weight_cat(data_weighted_survey, Smoking_recode)
+table_1_weight_cat(data_weighted_survey, Diabetes_Lifetime)
+table_1_weight_cat(data_weighted_survey, DIABETICEV)
+
+```
+
+```{r}
+table_1_weight_quant(data_weighted_survey, AGE)
+
+```
+```{r}
+data%>%
+  count(Race)
+
 ```
