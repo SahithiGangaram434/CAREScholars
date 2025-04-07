@@ -352,6 +352,14 @@ data%>%
   group_by(Mort_recode, Diabetes_Lifetime)%>%
   count()
 
+data_weighted<-survey::svydesign(id=~PSU,
+          weights=~PERWEIGHT,
+          #strata=~STRATA,
+          nest=TRUE,
+          survey.lonely.psu="adjust",
+          data=data_analysis_diabetes)
+
+
 
 
 ```
@@ -379,6 +387,29 @@ data_analysis_omit%>%
   
 
 
+```
+
+April 2025
+Less Adjusted Model: Sex, Age, Race, among those with Diabetes
+
+```{r}
+
+data_analysis_diabetes<-data_analysis_omit%>%
+  #filter(Diabetes_Lifetime=="Non-Diabetic")%>%
+  filter(Diabetes_Lifetime=="Diabetic")
+
+
+data_weighted<-survey::svydesign(id=~PSU,
+          weights=~PERWEIGHT,
+          #strata=~STRATA,
+          nest=TRUE,
+          survey.lonely.psu="adjust",
+          data=data_analysis_diabetes)
+
+cox_weighted_diabetes<-svycoxph(Surv(study_exposure, Mort_recode==TRUE) ~ Race + AGE+ sex, design = data_weighted)#Simplified model
+
+
+summary(cox_weighted_diabetes)
 ```
 
 
