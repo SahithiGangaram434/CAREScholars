@@ -1,0 +1,366 @@
+---
+title: "April 2025 New Data Import"
+author: "Ben Szeto"
+date: "2025-04-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r, libraries}
+
+library(tidyverse)
+library(ipumsr)
+library(survey)
+library(srvyr)
+library(table1)
+library(naniar)
+```
+
+```{r, importing data}
+ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00029.xml")
+
+data1 <- read_ipums_micro(ddi)
+
+ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00027.xml")
+
+data2 <- read_ipums_micro(ddi)
+
+ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00030.xml")
+
+data3 <- read_ipums_micro(ddi)
+
+
+ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00001.xml") #Earnings Data
+
+data4 <- read_ipums_micro(ddi)
+
+
+```
+```{r, merging data}
+data1<-data1%>%#Selecting variables of interest from data1
+  select(NHISPID, DIABETICAGE, DIAYRSAGO)
+
+data3<-data3%>%#Selecting variables of interest from data3
+  select(NHISPID, MORTDODY, MORTSTAT)
+
+data4<-data4%>%#Selecting variables of interest from data1
+  select(NHISPID, INCFAM97ON2, INCIMP1, INCIMP2, INCIMP3, INCIMP4, INCIMP5, IMPYFAMFLAG1, IMPYFAMFLAG2, IMPYFAMFLAG3,IMPYFAMFLAG4, IMPYFAMFLAG5, EARNIMP1, EARNIMP2, EARNIMP3, EARNIMP4, EARNIMP5 )
+
+
+data<-merge(data1, data2, by="NHISPID")
+data<-merge(data, data3, by="NHISPID")
+data<-merge(data, data4, by="NHISPID")
+
+data_prefilter<-data#Saving a copy so don't need to rerun code all the time
+```
+
+```{r, data cleaning}
+#Refactoring
+data<-data%>%
+  mutate(Race=as_factor(RACEA))%>%#RACEA to Race
+  mutate(mortstat=as_factor(MORTSTAT))%>%
+  mutate(morthypr=as_factor(MORTHYPR))%>%
+  mutate(sex=as_factor(SEX))
+
+
+#Filtering
+data<-data%>%
+  filter(Race%in%c("Chinese", "Asian Indian", "White", "Filipino"))%>% #selecting Chinese, Asian Indian, Filipino, and White
+  #filter(!BMI==0)%>% #filtering out extraneous BMIs #see section below
+  #filter(BMI<90)%>%
+  filter(MORTELIG==1)%>%#Make sure part of mortality data set, People who are less than 18 are not eligible
+  filter(!(HISPYN==2 & Race=="White"))#Removing NHW
+
+
+#If want to keep missing BMI and set to missing
+data<-data%>%
+  mutate(BMI=ifelse(BMI==0|BMI>90, "MISSING", BMI))
+```
+
+```{r}
+
+data<-data%>%
+  mutate(BMI_R_Cat=ifelse(BMI=="MISSING", "MISSING",ifelse(Race=="White", #Creating BMI Categorizations
+                          case_when(BMI<18.5~"Underweight",#BMI thresholds for Whites
+                                    BMI>=18.5 & BMI<25~"Normal Weight",
+                                    BMI>=25 & BMI <30~"Overweight",
+                                    BMI>=30~"Obese"),
+                          case_when(BMI<18.5~"Underweight",#BMI thresholds for Asians (Considered all races not White)
+                                    BMI>=18.5 & BMI<23~"Normal Weight",
+                                    BMI>=23 & BMI <27.5~"Overweight",
+                                    BMI>=27.5~"Obese"))))%>%#27.5 is obese for Asians
+  mutate(Education_recode=case_when(#Education recoding
+    EDUCREC2%in%c(10,20,30,31,32,40,41)~"Did Not Complete High School",
+    EDUCREC2==42~"High School Grad",
+    EDUCREC2%in%c(50,51,52,53)~"Some College",
+    EDUCREC2==54~"4 years college/Bachelor's degree",
+    EDUCREC2==60~"Post Bachelor",
+    EDUCREC2%in%c(96, 97,98,99)~"Unknown",
+    EDUCREC2==0~"NIU", 
+    TRUE~"Check Again"
+  ))%>%
+  mutate(Smoking_recode=case_when(
+    SMOKESTATUS2%in%c(10,11,12,13)~"Current Smoker",
+    SMOKESTATUS2%in%c(20,40)~"Former Smoker",
+    SMOKESTATUS2%in%c(30)~"Never Smoked",
+    SMOKESTATUS2==90~"Unknown",
+    TRUE~"Unknown"#Check this code later
+  ))%>%
+  mutate(Insurance_Status=case_when(
+    HINOTCOVE==1~"Covered",
+    HINOTCOVE==2~"Uncovered",
+    HINOTCOVE%in%c(7,8,9)~"Unknown",
+    TRUE~"Check Code"
+  ))%>%
+  mutate(USBorn_Recode=case_when(
+         USBORN%in%c(10,11,12)~"Born Outside US",
+         USBORN==20~"Born in US",
+         TRUE~"MISSING"))%>%
+  # move to factoring part of code mutate(USBorn_Recode=relevel(droplevels(as_factor(USBorn_Recode)), "Born in US"))
+  mutate(Earnings_recode=as_factor(case_when(
+    EARNINGS%in%c(0,97,98,99)~"NIU/Unknown",
+    EARNINGS%in%c(1,2,3,4,5,6)~"Low Income ($1-$34,999)",
+    EARNINGS%in%c(7,8,9,10)~"Middle Income($35,000-$74,999)",
+    EARNINGS==11~"High Income(>$75,000)"
+  )))%>%
+  # Move down to facotring part mutate(Earnings_recode=factor(Earnings_recode, levels=c("Low Income ($1-$34,999)", "Middle Income($35,000-$74,999)","High Income(>$75,000)","NIU/Unknown"  )))%>%
+  mutate(Diabetes_Lifetime=case_when(
+    DIABETICEV==2|MORTDIAB==2~"Diabetic",
+    DIABETICEV%in%c(0,7,8,9) & MORTDIAB==9~"Unknown/Not in Universe",
+    TRUE~"Non-Diabetic"
+  ))%>%
+  mutate(Mort_recode=ifelse(MORTSTAT==1, TRUE, FALSE))%>%
+  mutate(Mortality_Status=ifelse(MORTSTAT==1, "Presummed Dead", "Presummed Alive"))%>%#manually making the interaction term
+  mutate(Diabetes_Lifetime_Race=as_factor(ifelse(
+    Diabetes_Lifetime=="Diabetic",
+    case_when(
+      Race=="White"~"White Diabetic",
+      Race=="Asian Indian"~"Asian Indian Diabetic",
+      Race=="Filipino" ~"Filipino Diabetic",
+      Race=="Chinese"~"Chinese Diabetic",
+      TRUE~"Check Code"),
+    "Non-Diabetic"
+  )))%>%
+  mutate(HYPERTENEV_recode=case_when(#Go back and relevel for regression?
+    HYPERTENEV==1~"No",
+    HYPERTENEV==2~"Yes",
+    HYPERTENEV%in%c(7,8,9)~"Unknown",
+    TRUE~NA
+  ))%>%
+  mutate(exposure_birth=ifelse(
+    MORTSTAT==1,
+    MORTDODY-YEAR+AGE,#If dead, time ends at year of death
+    2019-YEAR+AGE#If alive or NIU, time ends at 2019
+    ))%>%
+  mutate(Lifespan_Diabetic=ifelse(
+    Diabetes_Lifetime=="Diabetic"&MORTSTAT==1,
+    exposure_birth,
+    NA
+  ))%>%
+  mutate(Age_Diabetes_Diagnosis=ifelse(DIABETICAGE==96, NA, DIABETICAGE))%>%
+  mutate(Diabetes_Over_Race=as_factor(ifelse(
+    Diabetes_Lifetime=="Diabetic",
+    case_when(
+      Race=="White"~"White Diabetic",
+      Race=="Asian Indian"~"Asian Indian Diabetic",
+      Race=="Filipino" ~"Filipino Diabetic",
+      Race=="Chinese"~"Chinese Diabetic",
+      TRUE~"Check Code"),
+    case_when(
+      Race=="White"~"White Non-diabetic",
+      Race=="Asian Indian"~"Asian Indian Non-diabetic",
+      Race=="Filipino" ~"Filipino Non-diabetic",
+      Race=="Chinese"~"Chinese Non-diabetic",
+      TRUE~"Check Code")
+  )))
+
+```
+
+```{r, leveling}
+data<-data%>%
+  mutate(Race=factor(droplevels(Race), c("White", "Chinese", "Filipino", "Asian Indian")))%>%
+  mutate(Education_recode=factor(Education_recode, levels=c("High School Grad", "Did Not Complete High School","Some College", "4 years college/Bachelor's degree", "Post Bachelor", "Unknown")))%>%
+  mutate(Smoking_recode=factor(Smoking_recode, c("Never Smoked", "Current Smoker", "Former Smoker", "Unknown")))%>%
+  mutate(Insurance_Status=factor(Insurance_Status, c("Covered", "Uncovered", "Unknown")))%>%
+  mutate(Earnings_recode=factor(Earnings_recode, c("Middle Income($35,000-$74,999)","Low Income ($1-$34,999)","High Income(>$75,000)", "NIU/Unknown")))%>%
+  mutate(sex=factor(droplevels(sex), c("Male", "Female")))%>%
+  mutate(Diabetes_Lifetime_Race=factor(Diabetes_Lifetime_Race, c("Non-Diabetic","White Diabetic", "Chinese Diabetic", "Filipino Diabetic","Asian Indian Diabetic")))%>%
+  mutate(Diabetes_Lifetime=factor(Diabetes_Lifetime, c("Non-Diabetic", "Diabetic")))%>%#Removing people who are unknown for diabetes or not
+  mutate(Diabetes_Over_Race=factor(Diabetes_Over_Race, c("White Non-diabetic","Asian Indian Non-diabetic", "Filipino Non-diabetic", "Chinese Non-diabetic","White Diabetic",  "Asian Indian Diabetic", "Filipino Diabetic", "Chinese Diabetic" )))%>%
+  mutate(BMI_R_Cat=factor(BMI_R_Cat, c("Normal Weight", "Underweight", "Overweight", "Obese", "MISSING")))
+  
+  
+
+levels(data$Race)
+levels(data$Education_recode)
+levels(data$Smoking_recode)
+levels(data$Insurance_Status)
+```
+
+```{r, filtering out those NIU diabetes}
+
+
+data<-data%>%
+  filter(!is.na(Diabetes_Lifetime))
+
+```
+
+```{, testing missingness}
+unique(data$INCFAM97ON2)
+  
+table(data$INCFAM97ON2)
+
+
+table(data$INCIMP2)
+```
+
+```{r}
+
+colnames(data)
+
+```
+Jump to Variable
+YEAR (Survey year)
+SERIAL (Sequential Serial Number, Household Record)
+STRATA (Stratum for variance estimation)
+PSU (Primary sampling unit (PSU) for variance estimation)
+NHISHID (NHIS Unique identifier, household)
+HHWEIGHT (Household weight, final annual)
+PERNUM (Person number within family/household (from reformatting))
+NHISPID (NHIS Unique Identifier, person)
+HHX (Household number (from NHIS))
+FMX (Family number (from NHIS))
+PX (Person number of respondent (from NHIS).)
+PERWEIGHT (Final basic annual weight)
+SAMPWEIGHT (Sample Person Weight)
+FWEIGHT (Final annual family weight)
+ASTATFLG (Sample adult flag)
+CSTATFLG (Sample child flag)
+INCFAM97ON2 (Total combined family income (1997+ w. 2007 categories))
+INCIMP1 (Imputed total combined family income (1997+ grouping))
+INCIMP2 (Imputed total combined family income (1997+ grouping))
+INCIMP3 (Imputed total combined family income (1997+ grouping))
+INCIMP4 (Imputed total combined family income (1997+ grouping))
+INCIMP5 (Imputed total combined family income (1997+ grouping))
+IMPYFAMFLAG1 (Family income group imputation flag 1)
+IMPYFAMFLAG2 (Family income group imputation flag 2)
+IMPYFAMFLAG3 (Family income group imputation flag 3)
+IMPYFAMFLAG4 (Family income group imputation flag 4)
+IMPYFAMFLAG5 (Family income group imputation flag 5)
+EARNINGS (Person's total earnings, previous calendar year)
+EARNIMP1 (Person's imputed total earnings, previous calendar year)
+EARNIMP2 (Person's imputed total earnings, previous calendar year)
+EARNIMP3 (Person's imputed total earnings, previous calendar year)
+EARNIMP4 (Person's imputed total earnings, previous calendar year)
+EARNIMP5 (Person's imputed total earnings, previous calendar year)
+
+```{r}
+#missingness_test_set<-data%>%#Selecting variables of interest from data1
+ # select(NHISPID, ASTATFLG, CSTATFLG, INCFAM97ON2, INCIMP1, INCIMP2, INCIMP3, INCIMP4, INCIMP5, IMPYFAMFLAG1, IMPYFAMFLAG2, IMPYFAMFLAG3,IMPYFAMFLAG4, IMPYFAMFLAG5, EARNINGS, EARNIMP1, EARNIMP2, EARNIMP3, EARNIMP4, EARNIMP5 )
+
+missingness_test_set<-data%>%
+  select(INCFAM97ON2,#Total combined family income (1997+ w. 2007 categories
+         INCIMP1, #(Imputed total combined family income (1997+ grouping))
+         INCIMP2, #(Imputed total combined family income (1997+ grouping))
+         INCIMP3, #(Imputed total combined family income (1997+ grouping))
+         INCIMP4, #(Imputed total combined family income (1997+ grouping))
+         INCIMP5, #(Imputed total combined family income (1997+ grouping)))
+         IMPYFAMFLAG1, #(Family income group imputation flag 1)
+         IMPYFAMFLAG2, #(Family income group imputation flag 2)
+         IMPYFAMFLAG3, #(Family income group imputation flag 3)
+         IMPYFAMFLAG4, #(Family income group imputation flag 4)
+         IMPYFAMFLAG5, #(Family income group imputation flag 5)
+         EARNINGS, #(Person's total earnings, previous calendar year)
+         EARNIMP1, #(Person's imputed total earnings, previous calendar year)
+         EARNIMP2, #(Person's imputed total earnings, previous calendar year)
+         EARNIMP3, #(Person's imputed total earnings, previous calendar year)
+         EARNIMP4, #(Person's imputed total earnings, previous calendar year)
+         EARNIMP5 #(Person's imputed total earnings, previous calendar year)
+  )
+
+
+
+
+lapply(missingness_test_set, unique)
+
+missingness_test_set2<-missingness_test_set%>%
+  mutate(INCFAM97ON2=ifelse(INCFAM97ON2%in%c(97:99), NA, INCFAM97ON2))%>%
+  mutate( EARNINGS=ifelse(EARNINGS==0, NA,  EARNINGS))%>%
+  mutate( EARNIMP1=ifelse(EARNIMP1==0, NA,  EARNIMP1))%>%
+  mutate( EARNIMP2=ifelse(EARNIMP2==0, NA,  EARNIMP2))%>%
+  mutate( EARNIMP3=ifelse(EARNIMP3==0, NA,  EARNIMP3))%>%
+  mutate( EARNIMP4=ifelse(EARNIMP4==0, NA,  EARNIMP4))%>%
+  mutate( EARNIMP5=ifelse(EARNIMP5==0, NA,  EARNIMP5))
+
+miss_var_summary(missingness_test_set2)
+
+
+lapply(missingness_test_set, function(col) {
+  round(100 * prop.table(table(col)), 2)  
+})
+
+
+```
+
+```{r}
+data%>%
+  count(Race)
+
+```
+
+
+```{r, categorizing household income}
+
+data<-data%>%
+  mutate(Family_Earnings_Nonimputed=case_when(
+    INCFAM97ON2%in%c(10)~"Low Household Income (<$35k)",
+    INCFAM97ON2%in%c(20,30,21)~"Middle Household Income ($35k-$100k)",
+    INCFAM97ON2%in%c(32)~"High Household Income $100k+",
+    INCFAM97ON2==96~"Above $20k but otherwise unknown",
+    INCFAM97ON2%in%c(97,98,99)~"Unknown"
+  ))
+
+table(data$Family_Earnings_Nonimputed)
+
+```
+
+
+STARTING ANALYSIS
+```{r}
+
+data_analysis_omit<-data%>%
+    select(exposure_birth, Mort_recode, Race, AGE, sex, Diabetes_Lifetime_Race, Diabetes_Lifetime, BMI_R_Cat, Education_recode, Earnings_recode, Smoking_recode, Insurance_Status, USBorn_Recode, PERWEIGHT, PSU, STRATA, MORTUCODLD, Family_Earnings_Nonimputed)%>%
+  mutate(study_exposure=exposure_birth-AGE)%>%
+  filter(!study_exposure==0)
+
+
+data_analysis_diabetes<-data_analysis_omit%>%
+  #filter(Diabetes_Lifetime=="Non-Diabetic")%>%
+  filter(Diabetes_Lifetime=="Diabetic")
+
+
+data_weighted<-survey::svydesign(id=~PSU,
+          weights=~PERWEIGHT,
+          #strata=~STRATA,
+          nest=TRUE,
+          survey.lonely.psu="adjust",
+          data=data_analysis_diabetes)
+
+cox_weighted_diabetes<-svycoxph(Surv(study_exposure, Mort_recode==TRUE) ~ Race + AGE+ sex+ Education_recode+Family_Earnings_Nonimputed+Smoking_recode+Insurance_Status+BMI_R_Cat, design = data_weighted)#Remove foreign born and asians lower risk
+
+
+summary(cox_weighted_diabetes)#not including nativity with new family earnings
+
+
+cox_weighted_diabetes<-svycoxph(Surv(study_exposure, Mort_recode==TRUE) ~ Race + AGE+ sex+ Education_recode+Earnings_recode+Smoking_recode+Insurance_Status+BMI_R_Cat, design = data_weighted)#Remove foreign born and asians lower risk
+
+
+summary(cox_weighted_diabetes)
+summary(cox_weighted_diabetes_w_nativity)#not including nativity, original analysis
+
+```

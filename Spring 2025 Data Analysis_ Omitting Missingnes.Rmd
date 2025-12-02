@@ -1,0 +1,1872 @@
+---
+title: "Ommitting Missingness"
+author: "Ben Szeto"
+date: "2025-04-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, libraries}
+
+library(tidyverse)
+library(ipumsr)
+library(survey)
+library(srvyr)
+library(table1)
+library(naniar)
+library(mitools)
+```
+
+```{r, importing data}
+ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00029.xml")
+
+data1 <- read_ipums_micro(ddi)
+
+ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00027.xml")
+
+data2 <- read_ipums_micro(ddi)
+
+ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00030.xml")
+
+data3 <- read_ipums_micro(ddi)
+
+
+ddi <- read_ipums_ddi("C:/Users/bszet/Box/CARE Scholars 2024 - Diabetes Mortality Project/Data and Code/nhis_00001.xml") #Earnings Data
+
+data4 <- read_ipums_micro(ddi)
+
+
+```
+```{r, merging data}
+data1<-data1%>%#Selecting variables of interest from data1
+  select(NHISPID, DIABETICAGE, DIAYRSAGO)
+
+data3<-data3%>%#Selecting variables of interest from data3
+  select(NHISPID, MORTDODY, MORTSTAT)
+
+data4<-data4%>%#Selecting variables of interest from data1
+  select(NHISPID, INCFAM97ON2, INCIMP1, INCIMP2, INCIMP3, INCIMP4, INCIMP5, IMPYFAMFLAG1, IMPYFAMFLAG2, IMPYFAMFLAG3,IMPYFAMFLAG4, IMPYFAMFLAG5, EARNIMP1, EARNIMP2, EARNIMP3, EARNIMP4, EARNIMP5 )
+
+
+data<-merge(data1, data2, by="NHISPID")
+data<-merge(data, data3, by="NHISPID")
+data<-merge(data, data4, by="NHISPID")
+
+data_prefilter<-data#Saving a copy so don't need to rerun code all the time
+```
+
+```{r, data cleaning}
+#Refactoring
+data<-data%>%
+  mutate(Race=as_factor(RACEA))%>%#RACEA to Race
+  mutate(mortstat=as_factor(MORTSTAT))%>%
+  mutate(morthypr=as_factor(MORTHYPR))%>%
+  mutate(sex=as_factor(SEX))
+
+
+#Filtering
+data<-data%>%
+  filter(Race%in%c("Chinese", "Asian Indian", "White", "Filipino"))%>% #selecting Chinese, Asian Indian, Filipino, and White
+  #filter(!BMI==0)%>% #filtering out extraneous BMIs #see section below
+  #filter(BMI<90)%>%
+  filter(MORTELIG==1)%>%#Make sure part of mortality data set, People who are less than 18 are not eligible
+  filter(!(HISPYN==2 & Race=="White"))#Removing NHW
+
+
+#If want to keep missing BMI and set to missing
+data<-data%>%
+  mutate(BMI=ifelse(BMI==0|BMI>90, "MISSING", BMI))
+```
+
+```{r}
+
+data<-data%>%
+  mutate(BMI_R_Cat=ifelse(BMI=="MISSING", NA,ifelse(Race=="White", #Creating BMI Categorizations
+                          case_when(BMI<18.5~"Underweight",#BMI thresholds for Whites
+                                    BMI>=18.5 & BMI<25~"Normal Weight",
+                                    BMI>=25 & BMI <30~"Overweight",
+                                    BMI>=30~"Obese"),
+                          case_when(BMI<18.5~"Underweight",#BMI thresholds for Asians (Considered all races not White)
+                                    BMI>=18.5 & BMI<23~"Normal Weight",
+                                    BMI>=23 & BMI <27.5~"Overweight",
+                                    BMI>=27.5~"Obese"))))%>%#27.5 is obese for Asians
+  mutate(Education_recode=case_when(#Education recoding
+    EDUCREC2%in%c(10,20,30,31,32,40,41)~"Did Not Complete High School",
+    EDUCREC2==42~"High School Grad",
+    EDUCREC2%in%c(50,51,52,53)~"Some College",
+    EDUCREC2==54~"4 years college/Bachelor's degree",
+    EDUCREC2==60~"Post Bachelor",
+    EDUCREC2%in%c(96, 97,98,99)~NA,
+    EDUCREC2==0~"NIU", 
+    TRUE~"Check Again"
+  ))%>%
+  mutate(Smoking_recode=case_when(
+    SMOKESTATUS2%in%c(10,11,12,13)~"Current Smoker",
+    SMOKESTATUS2%in%c(20,40)~"Former Smoker",
+    SMOKESTATUS2%in%c(30)~"Never Smoked",
+    SMOKESTATUS2==90~NA,
+    TRUE~NA#Check this code later
+  ))%>%
+  mutate(Insurance_Status=case_when(
+    HINOTCOVE==1~"Covered",
+    HINOTCOVE==2~"Uncovered",
+    HINOTCOVE%in%c(7,8,9)~NA,
+    TRUE~"Check Code"
+  ))%>%
+  mutate(USBorn_Recode=case_when(
+         USBORN%in%c(10,11,12)~"Born Outside US",
+         USBORN==20~"Born in US",
+         TRUE~NA))%>%
+  # move to factoring part of code mutate(USBorn_Recode=relevel(droplevels(as_factor(USBorn_Recode)), "Born in US"))
+  mutate(Earnings_recode=as_factor(case_when(
+    EARNINGS%in%c(0,97,98,99)~NA,
+    EARNINGS%in%c(1,2,3,4,5,6)~"Low Income ($1-$34,999)",
+    EARNINGS%in%c(7,8,9,10)~"Middle Income($35,000-$74,999)",
+    EARNINGS==11~"High Income(>$75,000)"
+  )))%>%
+  # Move down to facotring part mutate(Earnings_recode=factor(Earnings_recode, levels=c("Low Income ($1-$34,999)", "Middle Income($35,000-$74,999)","High Income(>$75,000)",NA )))%>%
+  mutate(Diabetes_Lifetime=case_when(
+    DIABETICEV==2|MORTDIAB==2~"Diabetic",
+    DIABETICEV%in%c(0,7,8,9) & MORTDIAB==9~"Unknown/Not in Universe",
+    TRUE~"Non-Diabetic"
+  ))%>%
+  mutate(Mort_recode=ifelse(MORTSTAT==1, TRUE, FALSE))%>%
+  mutate(Mortality_Status=ifelse(MORTSTAT==1, "Presummed Dead", "Presummed Alive"))%>%#manually making the interaction term
+  mutate(Diabetes_Lifetime_Race=as_factor(ifelse(
+    Diabetes_Lifetime=="Diabetic",
+    case_when(
+      Race=="White"~"White Diabetic",
+      Race=="Asian Indian"~"Asian Indian Diabetic",
+      Race=="Filipino" ~"Filipino Diabetic",
+      Race=="Chinese"~"Chinese Diabetic",
+      TRUE~"Check Code"),
+    "Non-Diabetic"
+  )))%>%
+  mutate(HYPERTENEV_recode=case_when(#Go back and relevel for regression?
+    HYPERTENEV==1~"No",
+    HYPERTENEV==2~"Yes",
+    HYPERTENEV%in%c(7,8,9)~NA,
+    TRUE~NA
+  ))%>%
+  mutate(exposure_birth=ifelse(
+    MORTSTAT==1,
+    MORTDODY-YEAR+AGE,#If dead, time ends at year of death
+    2019-YEAR+AGE#If alive or NIU, time ends at 2019
+    ))%>%
+  mutate(Lifespan_Diabetic=ifelse(
+    Diabetes_Lifetime=="Diabetic"&MORTSTAT==1,
+    exposure_birth,
+    NA
+  ))%>%
+  mutate(Age_Diabetes_Diagnosis=ifelse(DIABETICAGE==96, NA, DIABETICAGE))%>%
+  mutate(Diabetes_Over_Race=as_factor(ifelse(
+    Diabetes_Lifetime=="Diabetic",
+    case_when(
+      Race=="White"~"White Diabetic",
+      Race=="Asian Indian"~"Asian Indian Diabetic",
+      Race=="Filipino" ~"Filipino Diabetic",
+      Race=="Chinese"~"Chinese Diabetic",
+      TRUE~"Check Code"),
+    case_when(
+      Race=="White"~"White Non-diabetic",
+      Race=="Asian Indian"~"Asian Indian Non-diabetic",
+      Race=="Filipino" ~"Filipino Non-diabetic",
+      Race=="Chinese"~"Chinese Non-diabetic",
+      TRUE~"Check Code")
+  )))
+
+```
+
+```{r, leveling}
+data<-data%>%
+  mutate(Race=factor(droplevels(Race), c("White", "Chinese", "Filipino", "Asian Indian")))%>%
+  mutate(Education_recode=factor(Education_recode, levels=c("High School Grad", "Did Not Complete High School","Some College", "4 years college/Bachelor's degree", "Post Bachelor", NA)))%>%
+  mutate(Smoking_recode=factor(Smoking_recode, c("Never Smoked", "Current Smoker", "Former Smoker", NA)))%>%
+  mutate(Insurance_Status=factor(Insurance_Status, c("Covered", "Uncovered", NA)))%>%
+  mutate(Earnings_recode=factor(Earnings_recode, c("Middle Income($35,000-$74,999)","Low Income ($1-$34,999)","High Income(>$75,000)", NA)))%>%
+  mutate(sex=factor(droplevels(sex), c("Male", "Female")))%>%
+  mutate(Diabetes_Lifetime_Race=factor(Diabetes_Lifetime_Race, c("Non-Diabetic","White Diabetic", "Chinese Diabetic", "Filipino Diabetic","Asian Indian Diabetic")))%>%
+  mutate(Diabetes_Lifetime=factor(Diabetes_Lifetime, c("Non-Diabetic", "Diabetic")))%>%#Removing people who are unknown for diabetes or not
+  mutate(Diabetes_Over_Race=factor(Diabetes_Over_Race, c("White Non-diabetic","Asian Indian Non-diabetic", "Filipino Non-diabetic", "Chinese Non-diabetic","White Diabetic",  "Asian Indian Diabetic", "Filipino Diabetic", "Chinese Diabetic" )))%>%
+  mutate(BMI_R_Cat=factor(BMI_R_Cat, c("Normal Weight", "Underweight", "Overweight", "Obese", NA)))
+  
+  
+
+levels(data$Race)
+levels(data$Education_recode)
+levels(data$Smoking_recode)
+levels(data$Insurance_Status)
+```
+
+```{r, filtering out those NIU diabetes}
+
+
+data<-data%>%
+  filter(!is.na(Diabetes_Lifetime))
+
+```
+
+```{r, testing missingness}
+unique(data$INCFAM97ON2)
+  
+table(data$INCFAM97ON2)
+```
+
+```{r}
+
+colnames(data)
+
+```
+Jump to Variable
+YEAR (Survey year)
+SERIAL (Sequential Serial Number, Household Record)
+STRATA (Stratum for variance estimation)
+PSU (Primary sampling unit (PSU) for variance estimation)
+NHISHID (NHIS Unique identifier, household)
+HHWEIGHT (Household weight, final annual)
+PERNUM (Person number within family/household (from reformatting))
+NHISPID (NHIS Unique Identifier, person)
+HHX (Household number (from NHIS))
+FMX (Family number (from NHIS))
+PX (Person number of respondent (from NHIS).)
+PERWEIGHT (Final basic annual weight)
+SAMPWEIGHT (Sample Person Weight)
+FWEIGHT (Final annual family weight)
+ASTATFLG (Sample adult flag)
+CSTATFLG (Sample child flag)
+INCFAM97ON2 (Total combined family income (1997+ w. 2007 categories))
+INCIMP1 (Imputed total combined family income (1997+ grouping))
+INCIMP2 (Imputed total combined family income (1997+ grouping))
+INCIMP3 (Imputed total combined family income (1997+ grouping))
+INCIMP4 (Imputed total combined family income (1997+ grouping))
+INCIMP5 (Imputed total combined family income (1997+ grouping))
+IMPYFAMFLAG1 (Family income group imputation flag 1)
+IMPYFAMFLAG2 (Family income group imputation flag 2)
+IMPYFAMFLAG3 (Family income group imputation flag 3)
+IMPYFAMFLAG4 (Family income group imputation flag 4)
+IMPYFAMFLAG5 (Family income group imputation flag 5)
+EARNINGS (Person's total earnings, previous calendar year)
+EARNIMP1 (Person's imputed total earnings, previous calendar year)
+EARNIMP2 (Person's imputed total earnings, previous calendar year)
+EARNIMP3 (Person's imputed total earnings, previous calendar year)
+EARNIMP4 (Person's imputed total earnings, previous calendar year)
+EARNIMP5 (Person's imputed total earnings, previous calendar year)
+
+```{r}
+#missingness_test_set<-data%>%#Selecting variables of interest from data1
+ # select(NHISPID, ASTATFLG, CSTATFLG, INCFAM97ON2, INCIMP1, INCIMP2, INCIMP3, INCIMP4, INCIMP5, IMPYFAMFLAG1, IMPYFAMFLAG2, IMPYFAMFLAG3,IMPYFAMFLAG4, IMPYFAMFLAG5, EARNINGS, EARNIMP1, EARNIMP2, EARNIMP3, EARNIMP4, EARNIMP5 )
+
+missingness_test_set<-data%>%
+  select(INCFAM97ON2,#Total combined family income (1997+ w. 2007 categories
+         INCIMP1, #(Imputed total combined family income (1997+ grouping))
+         INCIMP2, #(Imputed total combined family income (1997+ grouping))
+         INCIMP3, #(Imputed total combined family income (1997+ grouping))
+         INCIMP4, #(Imputed total combined family income (1997+ grouping))
+         INCIMP5, #(Imputed total combined family income (1997+ grouping)))
+         IMPYFAMFLAG1, #(Family income group imputation flag 1)
+         IMPYFAMFLAG2, #(Family income group imputation flag 2)
+         IMPYFAMFLAG3, #(Family income group imputation flag 3)
+         IMPYFAMFLAG4, #(Family income group imputation flag 4)
+         IMPYFAMFLAG5, #(Family income group imputation flag 5)
+         EARNINGS, #(Person's total earnings, previous calendar year)
+         EARNIMP1, #(Person's imputed total earnings, previous calendar year)
+         EARNIMP2, #(Person's imputed total earnings, previous calendar year)
+         EARNIMP3, #(Person's imputed total earnings, previous calendar year)
+         EARNIMP4, #(Person's imputed total earnings, previous calendar year)
+         EARNIMP5 #(Person's imputed total earnings, previous calendar year)
+  )
+
+
+
+
+lapply(missingness_test_set, unique)
+
+missingness_test_set2<-missingness_test_set%>%
+  mutate(INCFAM97ON2=ifelse(INCFAM97ON2%in%c(97:99), NA, INCFAM97ON2))%>%
+  mutate( EARNINGS=ifelse(EARNINGS==0, NA,  EARNINGS))%>%
+  mutate( EARNIMP1=ifelse(EARNIMP1==0, NA,  EARNIMP1))%>%
+  mutate( EARNIMP2=ifelse(EARNIMP2==0, NA,  EARNIMP2))%>%
+  mutate( EARNIMP3=ifelse(EARNIMP3==0, NA,  EARNIMP3))%>%
+  mutate( EARNIMP4=ifelse(EARNIMP4==0, NA,  EARNIMP4))%>%
+  mutate( EARNIMP5=ifelse(EARNIMP5==0, NA,  EARNIMP5))
+
+miss_var_summary(missingness_test_set2)
+
+
+lapply(missingness_test_set, function(col) {
+  round(100 * prop.table(table(col)), 2)  
+})
+
+
+```
+
+```{r}
+data%>%
+  count(Race)
+
+```
+
+
+```{r, categorizing household income}
+
+data<-data%>%
+  mutate(Family_Earnings_Nonimputed=case_when(
+    INCFAM97ON2%in%c(10)~"Low Household Income (<$35k)",
+    INCFAM97ON2%in%c(20,30,21)~"Middle Household Income ($35k-$100k)",
+    INCFAM97ON2%in%c(32)~"High Household Income $100k+",
+    #INCFAM97ON2==96~"Above $20k but otherwise unknown",
+    INCFAM97ON2==96~NA,
+    INCFAM97ON2%in%c(97,98,99)~NA
+  ))%>%
+  mutate(Family_Earnings_Nonimputed=factor(Family_Earnings_Nonimputed, c("Middle Household Income ($35k-$100k)","Low Household Income (<$35k)", "High Household Income $100k+", NA)))
+
+table(data$Family_Earnings_Nonimputed)
+
+```
+
+
+STARTING ANALYSIS
+```{r}
+
+miss_var_summary(data)
+#HH EARNINGS
+
+
+data_analysis_omit_HH<-data%>%
+    select(exposure_birth, Mort_recode, Race, AGE, sex, Diabetes_Lifetime, BMI_R_Cat, Education_recode, Smoking_recode, Insurance_Status, USBorn_Recode, PERWEIGHT, PSU, STRATA, MORTUCODLD, Family_Earnings_Nonimputed)%>%
+  mutate(study_exposure=exposure_birth-AGE)%>%
+  filter(!study_exposure==0)%>%
+  na.omit()#Omitting Missingness
+
+data_analysis_omit_HH%>%count(Race)#Counting Total Number of People if we omit
+
+data_analysis_diabetes_HH<-data_analysis_omit_HH%>%
+  #filter(Diabetes_Lifetime=="Non-Diabetic")%>%
+  filter(Diabetes_Lifetime=="Diabetic")
+
+
+data_weighted_HH<-survey::svydesign(id=~PSU,
+          weights=~PERWEIGHT,
+          #strata=~STRATA,
+          nest=TRUE,
+          survey.lonely.psu="adjust",
+          data=data_analysis_diabetes_HH)
+
+cox_weighted_diabetes_HH<-svycoxph(Surv(study_exposure, Mort_recode==TRUE) ~ Race + AGE+ sex+ Education_recode+Family_Earnings_Nonimputed+Smoking_recode+Insurance_Status+BMI_R_Cat, design = data_weighted_HH)#Remove foreign born and asians lower risk
+
+
+
+#EARNINGS
+data_analysis_omit<-data%>%
+    select(exposure_birth, Mort_recode, Race, AGE, sex, Earnings_recode, Diabetes_Lifetime, BMI_R_Cat, Education_recode, Smoking_recode, Insurance_Status, USBorn_Recode, PERWEIGHT, PSU, STRATA, MORTUCODLD)%>%
+  mutate(study_exposure=exposure_birth-AGE)%>%
+  filter(!study_exposure==0)%>%
+  na.omit()#Omitting Missingness
+
+data_analysis_omit%>%count(Race)#Counting Total Number of People if we omit
+
+data_analysis_diabetes<-data_analysis_omit%>%
+  #filter(Diabetes_Lifetime=="Non-Diabetic")%>%
+  filter(Diabetes_Lifetime=="Diabetic")
+
+
+data_weighted<-survey::svydesign(id=~PSU,
+          weights=~PERWEIGHT,
+          #strata=~STRATA,
+          nest=TRUE,
+          survey.lonely.psu="adjust",
+          data=data_analysis_diabetes)
+
+
+cox_weighted_diabetes<-svycoxph(Surv(study_exposure, Mort_recode==TRUE) ~ Race + AGE+ sex+ Education_recode+Earnings_recode+Smoking_recode+Insurance_Status+BMI_R_Cat, design = data_weighted)#Remove foreign born and asians lower risk
+
+summary(cox_weighted_diabetes_HH)#not including nativity with new family earnings
+summary(cox_weighted_diabetes)
+
+#Before Filtering Diabetes
+data_analysis_omit_HH%>%count(Race)
+data_analysis_omit%>%count(Race)
+
+#After Filtering Diabetes
+data_analysis_diabetes_HH%>%count(Race)
+data_analysis_diabetes%>%count(Race)
+
+
+```
+
+
+Regressions for Each Race
+```{r}
+data_analysis_omit_HH<-data%>%
+    select(exposure_birth, Mort_recode, Race, AGE, sex, Diabetes_Lifetime, BMI_R_Cat, Education_recode, Smoking_recode, Insurance_Status, USBorn_Recode, PERWEIGHT, PSU, STRATA, MORTUCODLD, Family_Earnings_Nonimputed)%>%
+  mutate(study_exposure=exposure_birth-AGE)%>%
+  filter(!study_exposure==0)%>%
+  na.omit()#Omitting Missingness
+
+data_analysis_omit_HH_White<-data_analysis_omit_HH%>%
+  filter(Race=="White")
+
+data_analysis_omit_HH_Chinese<-data_analysis_omit_HH%>%
+  filter(Race=="Chinese")
+
+data_analysis_omit_HH_Filipino<-data_analysis_omit_HH%>%
+  filter(Race=="Filipino")
+
+data_analysis_omit_HH_AsianIndian<-data_analysis_omit_HH%>%
+  filter(Race=="Asian Indian")
+
+data_weighted_HH_White<-survey::svydesign(id=~PSU,
+          weights=~PERWEIGHT,
+          #strata=~STRATA,
+          nest=TRUE,
+          survey.lonely.psu="adjust",
+          data=data_analysis_omit_HH_White)
+
+data_weighted_HH_Chinese<-survey::svydesign(id=~PSU,
+          weights=~PERWEIGHT,
+          #strata=~STRATA,
+          nest=TRUE,
+          survey.lonely.psu="adjust",
+          data=data_analysis_omit_HH_Chinese)
+
+data_weighted_HH_Filipino<-survey::svydesign(id=~PSU,
+          weights=~PERWEIGHT,
+          #strata=~STRATA,
+          nest=TRUE,
+          survey.lonely.psu="adjust",
+          data=data_analysis_omit_HH_Filipino)
+
+data_weighted_HH_AsianIndian<-survey::svydesign(id=~PSU,
+          weights=~PERWEIGHT,
+          #strata=~STRATA,
+          nest=TRUE,
+          survey.lonely.psu="adjust",
+          data=data_analysis_omit_HH_AsianIndian)
+
+
+
+
+cox_weighted_diabetes_HH_White<-svycoxph(Surv(study_exposure, Mort_recode==TRUE) ~ Diabetes_Lifetime+ AGE+ sex+ Education_recode+Family_Earnings_Nonimputed+Smoking_recode+Insurance_Status+BMI_R_Cat, design = data_weighted_HH_White)
+cox_weighted_diabetes_HH_Chinese<-svycoxph(Surv(study_exposure, Mort_recode==TRUE) ~ Diabetes_Lifetime+ AGE+ sex+ Education_recode+Family_Earnings_Nonimputed+Insurance_Status+BMI_R_Cat, design = data_weighted_HH_Chinese)
+cox_weighted_diabetes_HH_Filipino<-svycoxph(Surv(study_exposure, Mort_recode==TRUE) ~ Diabetes_Lifetime+ AGE+ sex+ Education_recode+Family_Earnings_Nonimputed+Insurance_Status+BMI_R_Cat, design = data_weighted_HH_Filipino)
+cox_weighted_diabetes_HH_AsianIndian<-svycoxph(Surv(study_exposure, Mort_recode==TRUE) ~Diabetes_Lifetime+ AGE+ sex+ Education_recode+Family_Earnings_Nonimputed+Smoking_recode+Insurance_Status+BMI_R_Cat, design = data_weighted_HH_AsianIndian)
+
+summary(cox_weighted_diabetes_HH_White)
+summary(cox_weighted_diabetes_HH_Chinese)
+summary(cox_weighted_diabetes_HH_Filipino)
+summary(cox_weighted_diabetes_HH_AsianIndian)
+
+
+
+
+
+
+
+
+
+cox_weighted_diabetes_HH_White<-svycoxph(Surv(study_exposure, Mort_recode==TRUE) ~ Diabetes_Lifetime+ AGE+ sex, design = data_weighted_HH_White)
+cox_weighted_diabetes_HH_Chinese<-svycoxph(Surv(study_exposure, Mort_recode==TRUE) ~ Diabetes_Lifetime+ AGE+ sex, design = data_weighted_HH_Chinese)
+cox_weighted_diabetes_HH_Filipino<-svycoxph(Surv(study_exposure, Mort_recode==TRUE) ~ Diabetes_Lifetime+ AGE+ sex, design = data_weighted_HH_Filipino)
+cox_weighted_diabetes_HH_AsianIndian<-svycoxph(Surv(study_exposure, Mort_recode==TRUE) ~Diabetes_Lifetime+ AGE+ sex, design = data_weighted_HH_AsianIndian)
+
+summary(cox_weighted_diabetes_HH_White)
+summary(cox_weighted_diabetes_HH_Chinese)
+summary(cox_weighted_diabetes_HH_Filipino)
+summary(cox_weighted_diabetes_HH_AsianIndian)
+```
+
+
+
+
+Working with the imputed data
+
+```{r, confirming correct dataset}
+data%>%
+  count(Race)#Making sure right data: Should be white: 465015; Chinese: 6482; Filipino: 7033; Asian Indian: 5834	
+
+```
+
+```{r}
+
+colnames(data)
+
+
+```
+
+INCIMP1 (Imputed total combined family income (1997+ grouping))
+INCIMP2 (Imputed total combined family income (1997+ grouping))
+INCIMP3 (Imputed total combined family income (1997+ grouping))
+INCIMP4 (Imputed total combined family income (1997+ grouping))
+INCIMP5 (Imputed total combined family income (1997+ grouping))
+
+
+
+```{r}
+data_family_income_imputed<-data%>%
+  select(exposure_birth, Mort_recode, Race, AGE, sex, Diabetes_Lifetime, BMI_R_Cat, Education_recode, Smoking_recode, Insurance_Status, USBorn_Recode, PERWEIGHT, PSU, STRATA, MORTUCODLD,INCIMP1, INCIMP2, INCIMP3, INCIMP4, INCIMP5)%>%
+  mutate(study_exposure=exposure_birth-AGE)%>%
+  filter(!study_exposure==0)%>%
+  na.omit()#omitting missingness from all columns
+
+data_family_income_imputed%>%
+  count(Race)#Number each race after omitting missingness
+
+#Creating list of datasets each with different imputed income variable
+list_imputed_family_income_datasets<-list(
+  data_family_income_imputed%>%mutate(family_earnings_single_imp=INCIMP1),
+  data_family_income_imputed%>%mutate(family_earnings_single_imp=INCIMP2),
+  data_family_income_imputed%>%mutate(family_earnings_single_imp=INCIMP3),
+  data_family_income_imputed%>%mutate(family_earnings_single_imp=INCIMP4),
+  data_family_income_imputed%>%mutate(family_earnings_single_imp=INCIMP5)
+)
+
+
+list_imputed_family_income_datasets<-lapply(list_imputed_family_income_datasets, function(dataset_i){#setting income thresholds
+  dataset_i%>%
+  mutate(family_earnings_single_imp_cat=case_when(
+    family_earnings_single_imp%in%c(1:12)~"low income 0-35k",
+    family_earnings_single_imp%in%c(20:42)~"lower-middle 35k-65k",
+    family_earnings_single_imp%in%c(50:65)~"upper-middle 65k-100k",
+    family_earnings_single_imp%in%c(66:70)~"upper class 100k+"
+  ))%>%
+    mutate(family_earnings_single_imp_cat=factor(family_earnings_single_imp_cat, levels=c("lower-middle 35k-65k", "low income 0-35k", "upper-middle 65k-100k", "upper class 100k+")))
+})
+
+list_imputed_family_income_datasets
+
+
+
+#imp_data<-imputationList(list_imputed_family_income_datasets) #creating imputed data set
+
+#imp_data#imputed data set
+
+
+
+```
+
+```{r}
+survey_designs <- lapply(list_imputed_family_income_datasets, function(dataset_i){#Creating survey designs for each of the datasets
+  svydesign(
+    ids = ~PSU,
+    strata = ~STRATA,
+    weights = ~PERWEIGHT,
+    nest = TRUE,
+    data = dataset_i
+  )
+}
+  )
+
+
+list_models_imputations<-lapply(survey_designs, function(survey_design_i){#running regressions for each of the imputations
+  
+  svycoxph(Surv(study_exposure, Mort_recode == TRUE) ~ 
+             Race + AGE + sex + Education_recode + 
+             family_earnings_single_imp_cat + Smoking_recode + 
+             Insurance_Status + BMI_R_Cat, 
+           design = survey_design_i)#Using each survey design from imputations
+  
+})
+
+
+library(mitools)
+
+pooled_imputated_models <- MIcombine(list_models_imputations)
+
+pooled_imputateed_models_summary<-summary(pooled_imputated_models)
+
+pooled_imputateed_models_summary%>%
+  mutate(exp_results=exp(results))%>%
+  mutate(exp_lower=exp(`(lower`))%>%
+  mutate(exp_upper=exp(`upper)`))
+  
+
+```
+
+
+```{r, testing income thresholds}
+data%>%
+  mutate(family_income=case_when(
+    INCIMP1%in%c(1:12)~"low income 0-35k",
+    INCIMP1%in%c(20:42)~"lower-middle 35k-65k",
+    INCIMP1%in%c(50:65)~"upper-middle 65k-100k",
+    INCIMP1%in%c(66:70)~"upper class 100k+"
+  ))%>%
+  count(family_income)
+
+```
+
+
+
+
+
+
+Only those with diabetes
+```{r}
+data_family_income_imputed<-data%>%
+  select(exposure_birth, Mort_recode, Race, AGE, sex, Diabetes_Lifetime, BMI_R_Cat, Education_recode, Smoking_recode, Insurance_Status, USBorn_Recode, PERWEIGHT, PSU, STRATA, MORTUCODLD,INCIMP1, INCIMP2, INCIMP3, INCIMP4, INCIMP5)%>%
+  mutate(study_exposure=exposure_birth-AGE)%>%
+  filter(!study_exposure==0)%>%
+  filter(Diabetes_Lifetime=="Diabetic")%>%
+  na.omit()#omitting missingness from all columns
+
+data_family_income_imputed%>%
+  count(Race)#Number each race after omitting missingness
+data_family_income_imputed%>%
+  mutate(family_earnings_single_imp_cat=case_when(
+    INCIMP1%in%c(1:12)~"low income 0-35k",
+    INCIMP1%in%c(20:42)~"lower-middle 35k-65k",
+    INCIMP1%in%c(50:65)~"upper-middle 65k-100k",
+    INCIMP1%in%c(66:70)~"upper class 100k+"))%>%
+  count(family_earnings_single_imp_cat)
+
+
+#Creating list of datasets each with different imputed income variable
+list_imputed_family_income_datasets<-list(
+  data_family_income_imputed%>%mutate(family_earnings_single_imp=INCIMP1),
+  data_family_income_imputed%>%mutate(family_earnings_single_imp=INCIMP2),
+  data_family_income_imputed%>%mutate(family_earnings_single_imp=INCIMP3),
+  data_family_income_imputed%>%mutate(family_earnings_single_imp=INCIMP4),
+  data_family_income_imputed%>%mutate(family_earnings_single_imp=INCIMP5)
+)
+
+
+list_imputed_family_income_datasets<-lapply(list_imputed_family_income_datasets, function(dataset_i){#setting income thresholds
+  dataset_i%>%
+  mutate(family_earnings_single_imp_cat=case_when(
+    family_earnings_single_imp%in%c(1:12)~"low income 0-35k",
+    family_earnings_single_imp%in%c(20:42)~"lower-middle 35k-65k",
+    family_earnings_single_imp%in%c(50:65)~"upper-middle 65k-100k",
+    family_earnings_single_imp%in%c(66:70)~"upper class 100k+"
+  ))%>%
+    mutate(family_earnings_single_imp_cat=factor(family_earnings_single_imp_cat, levels=c("lower-middle 35k-65k", "low income 0-35k", "upper-middle 65k-100k", "upper class 100k+")))
+})
+
+list_imputed_family_income_datasets
+
+
+
+#imp_data<-imputationList(list_imputed_family_income_datasets) #creating imputed data set
+
+#imp_data#imputed data set
+
+
+
+```
+
+```{r}
+survey_designs <- lapply(list_imputed_family_income_datasets, function(dataset_i){#Creating survey designs for each of the datasets
+  svydesign(
+    ids = ~PSU,
+    #strata = ~STRATA,
+    weights = ~PERWEIGHT,
+    nest = TRUE,
+    data = dataset_i
+  )
+}
+  )
+
+
+list_models_imputations<-lapply(survey_designs, function(survey_design_i){#running regressions for each of the imputations
+  
+  svycoxph(Surv(study_exposure, Mort_recode == TRUE) ~ 
+             Race + AGE + sex + Education_recode + 
+             family_earnings_single_imp_cat + Smoking_recode + 
+             Insurance_Status + BMI_R_Cat+USBorn_Recode, ###############################################################################################################INCLUDE OR DO NOT INCLUDE NATIVITY VARIABLE HERE
+           design = survey_design_i)#Using each survey design from imputations
+  
+})
+
+
+library(mitools)
+
+pooled_imputated_models <- MIcombine(list_models_imputations)
+
+pooled_imputateed_models_summary<-summary(pooled_imputated_models)
+
+pooled_imputateed_models_summary%>%
+  mutate(exp_results=exp(results))%>%
+  mutate(exp_lower=exp(`(lower`))%>%
+  mutate(exp_upper=exp(`upper)`))
+  
+###########VARIANCE INFLATION FACTOR
+get_pooled_vifs <- function(survey_designs, formula, response_var = NULL) {
+  # Dependencies
+  require(survey)
+  require(car)
+  require(dplyr)
+  require(tidyr)
+  require(purrr)
+  
+  # If no response var provided, pick the first numeric variable in dataset
+  if (is.null(response_var)) {
+    first_data <- survey_designs[[1]]$variables
+    numeric_vars <- names(first_data)[sapply(first_data, is.numeric)]
+    if (length(numeric_vars) == 0) stop("No numeric variable found to use as placeholder response.")
+    response_var <- numeric_vars[1]
+    message("Using ", response_var, " as placeholder response for VIF calculation.")
+  }
+  
+  # Update formula to have a response
+  vif_formula <- update(formula, as.formula(paste(response_var, "~ .")))
+  
+  # Compute VIFs for each imputation
+  vif_list <- lapply(survey_designs, function(design_i) {
+    model_i <- svyglm(vif_formula, design = design_i)
+    vif_vals <- car::vif(model_i)
+    
+    # Handle GVIFs (for categorical variables)
+    if (is.matrix(vif_vals)) {
+      vif_df <- as.data.frame(vif_vals)
+      vif_df <- vif_df %>%
+        mutate(
+          Variable = rownames(vif_vals),
+          GVIF_adj = ifelse(Df > 1, (GVIF)^(1 / (2 * Df)), GVIF)
+        ) %>%
+        select(Variable, GVIF_adj) %>%
+        rename(VIF = GVIF_adj)
+    } else {
+      vif_df <- tibble(Variable = names(vif_vals), VIF = as.numeric(vif_vals))
+    }
+    
+    vif_df
+  })
+  
+predictor_formula <- ~ Race + AGE + sex + Education_recode + 
+  family_earnings_single_imp_cat + Smoking_recode + 
+  Insurance_Status + BMI_R_Cat + USBorn_Recode
+
+vif_results <- get_pooled_vifs(survey_designs, formula = predictor_formula)
+  
+
+```
+
+
+
+#For May 5th Meeting
+Regressions for each race adjusted and unadjusted
+
+```{r, white}
+
+#Data collection
+white_data_imputed<-data%>%
+  select(exposure_birth, Mort_recode, Race, AGE, sex, Diabetes_Lifetime, BMI_R_Cat, Education_recode, Smoking_recode, Insurance_Status, USBorn_Recode, PERWEIGHT, PSU, STRATA, MORTUCODLD,INCIMP1, INCIMP2, INCIMP3, INCIMP4, INCIMP5)%>%
+  mutate(study_exposure=exposure_birth-AGE)%>%
+  filter(!study_exposure==0)%>%
+  filter(Race=="White")%>%
+  na.omit()#omitting missingness from all columns
+
+
+#creating the various imputed data sets
+white_data_imputed_datasets<-list(
+  white_data_imputed%>%mutate(family_earnings_single_imp=INCIMP1),
+  white_data_imputed%>%mutate(family_earnings_single_imp=INCIMP2),
+  white_data_imputed%>%mutate(family_earnings_single_imp=INCIMP3),
+  white_data_imputed%>%mutate(family_earnings_single_imp=INCIMP4),
+  white_data_imputed%>%mutate(family_earnings_single_imp=INCIMP5)
+)
+
+#Setting bounds for income
+white_data_imputed_datasets<-lapply(white_data_imputed_datasets, function(dataset_i){
+  dataset_i%>%
+  mutate(family_earnings_single_imp_cat=case_when(
+    family_earnings_single_imp%in%c(1:12)~"low income 0-35k",
+    family_earnings_single_imp%in%c(20:42)~"lower-middle 35k-65k",
+    family_earnings_single_imp%in%c(50:65)~"upper-middle 65k-100k",
+    family_earnings_single_imp%in%c(66:70)~"upper class 100k+"
+  ))%>%
+    mutate(family_earnings_single_imp_cat=factor(family_earnings_single_imp_cat, levels=c("lower-middle 35k-65k", "low income 0-35k", "upper-middle 65k-100k", "upper class 100k+")))
+})
+
+white_data_imputed_datasets
+
+
+
+#Creating survey weight objects
+
+survey_designs_white <- lapply(white_data_imputed_datasets, function(dataset_i){#Creating survey designs for each of the datasets
+  svydesign(
+    ids = ~PSU,
+    #strata = ~STRATA,
+    weights = ~PERWEIGHT,
+    nest = TRUE,
+    data = dataset_i
+  )
+}
+  )
+
+########################################################################################################################################################################################################
+#White Adjusted Model
+######################
+
+white_adjusted_models<-lapply(survey_designs_white, function(survey_design_i){#running regressions for each of the imputations
+  
+  svycoxph(Surv(study_exposure, Mort_recode == TRUE) ~ 
+              Diabetes_Lifetime+AGE + sex + Education_recode + 
+             family_earnings_single_imp_cat + Smoking_recode + 
+             Insurance_Status + BMI_R_Cat, 
+           design = survey_design_i)#Using each survey design from imputations
+  
+})
+
+
+
+#Pooling Imputed Models
+white_adjusted_pooled_imputated_models <- MIcombine(white_adjusted_models)
+
+white_adjusted_pooled_imputated_models_summary<-summary(white_adjusted_pooled_imputated_models)
+
+white_adjusted_output<-white_adjusted_pooled_imputated_models_summary%>%
+  mutate(exp_results=exp(results))%>%
+  mutate(exp_lower=exp(`(lower`))%>%
+  mutate(exp_upper=exp(`upper)`))
+
+white_adjusted_output#White adjusted output
+
+
+########################################################################################################################################################################################################
+#White UNadjusted Model
+######################
+
+white_un_adjusted_models<-lapply(survey_designs_white, function(survey_design_i){#running regressions for each of the imputations
+  
+  svycoxph(Surv(study_exposure, Mort_recode == TRUE) ~ 
+              Diabetes_Lifetime+AGE + sex, 
+           design = survey_design_i)#Using each survey design from imputations
+  
+})
+
+
+
+#Pooling Imputed Models
+white_un_adjusted_pooled_imputated_models <- MIcombine(white_un_adjusted_models)
+
+white_un_adjusted_pooled_imputated_models_summary<-summary(white_un_adjusted_pooled_imputated_models)
+
+white_un_adjusted_output<-white_un_adjusted_pooled_imputated_models_summary%>%
+  mutate(exp_results=exp(results))%>%
+  mutate(exp_lower=exp(`(lower`))%>%
+  mutate(exp_upper=exp(`upper)`))
+
+white_un_adjusted_output#White UNadjusted output
+
+
+
+```
+
+```{r, chinese}
+#Data collection
+chinese_data_imputed<-data%>%
+  select(exposure_birth, Mort_recode, Race, AGE, sex, Diabetes_Lifetime, BMI_R_Cat, Education_recode, Smoking_recode, Insurance_Status, USBorn_Recode, PERWEIGHT, PSU, STRATA, MORTUCODLD,INCIMP1, INCIMP2, INCIMP3, INCIMP4, INCIMP5)%>%
+  mutate(study_exposure=exposure_birth-AGE)%>%
+  filter(!study_exposure==0)%>%
+  filter(Race=="Chinese")%>%
+  na.omit()#omitting missingness from all columns
+
+
+#creating the various imputed data sets
+chinese_data_imputed_datasets<-list(
+  chinese_data_imputed%>%mutate(family_earnings_single_imp=INCIMP1),
+  chinese_data_imputed%>%mutate(family_earnings_single_imp=INCIMP2),
+  chinese_data_imputed%>%mutate(family_earnings_single_imp=INCIMP3),
+  chinese_data_imputed%>%mutate(family_earnings_single_imp=INCIMP4),
+  chinese_data_imputed%>%mutate(family_earnings_single_imp=INCIMP5)
+)
+
+#Setting bounds for income
+chinese_data_imputed_datasets<-lapply(chinese_data_imputed_datasets, function(dataset_i){
+  dataset_i%>%
+  mutate(family_earnings_single_imp_cat=case_when(
+    family_earnings_single_imp%in%c(1:12)~"low income 0-35k",
+    family_earnings_single_imp%in%c(20:42)~"lower-middle 35k-65k",
+    family_earnings_single_imp%in%c(50:65)~"upper-middle 65k-100k",
+    family_earnings_single_imp%in%c(66:70)~"upper class 100k+"
+  ))%>%
+    mutate(family_earnings_single_imp_cat=factor(family_earnings_single_imp_cat, levels=c("lower-middle 35k-65k", "low income 0-35k", "upper-middle 65k-100k", "upper class 100k+")))
+})
+
+chinese_data_imputed_datasets
+
+
+
+#Creating survey weight objects
+
+survey_designs_chinese <- lapply(chinese_data_imputed_datasets, function(dataset_i){#Creating survey designs for each of the datasets
+  svydesign(
+    ids = ~PSU,
+    #strata = ~STRATA,
+    weights = ~PERWEIGHT,
+    nest = TRUE,
+    data = dataset_i
+  )
+}
+  )
+
+########################################################################################################################################################################################################
+#chinese Adjusted Model
+######################
+
+chinese_adjusted_models<-lapply(survey_designs_chinese, function(survey_design_i){#running regressions for each of the imputations
+  
+  svycoxph(Surv(study_exposure, Mort_recode == TRUE) ~ 
+              Diabetes_Lifetime+AGE + sex + Education_recode + 
+             family_earnings_single_imp_cat + Smoking_recode + 
+             Insurance_Status + BMI_R_Cat, 
+           design = survey_design_i)#Using each survey design from imputations
+  
+})
+
+
+
+#Pooling Imputed Models
+chinese_adjusted_pooled_imputated_models <- MIcombine(chinese_adjusted_models)
+
+chinese_adjusted_pooled_imputated_models_summary<-summary(chinese_adjusted_pooled_imputated_models)
+
+chinese_adjusted_output<-chinese_adjusted_pooled_imputated_models_summary%>%
+  mutate(exp_results=exp(results))%>%
+  mutate(exp_lower=exp(`(lower`))%>%
+  mutate(exp_upper=exp(`upper)`))
+
+chinese_adjusted_output#chinese adjusted output
+
+
+########################################################################################################################################################################################################
+#chinese UNadjusted Model
+######################
+
+chinese_un_adjusted_models<-lapply(survey_designs_chinese, function(survey_design_i){#running regressions for each of the imputations
+  
+  svycoxph(Surv(study_exposure, Mort_recode == TRUE) ~ 
+              Diabetes_Lifetime+AGE + sex, 
+           design = survey_design_i)#Using each survey design from imputations
+  
+})
+
+
+
+#Pooling Imputed Models
+chinese_un_adjusted_pooled_imputated_models <- MIcombine(chinese_un_adjusted_models)
+
+chinese_un_adjusted_pooled_imputated_models_summary<-summary(chinese_un_adjusted_pooled_imputated_models)
+
+chinese_un_adjusted_output<-chinese_un_adjusted_pooled_imputated_models_summary%>%
+  mutate(exp_results=exp(results))%>%
+  mutate(exp_lower=exp(`(lower`))%>%
+  mutate(exp_upper=exp(`upper)`))
+
+chinese_un_adjusted_output#chinese UNadjusted output
+
+```
+
+```{r, Filipino}
+#Data collection
+filipino_data_imputed<-data%>%
+  select(exposure_birth, Mort_recode, Race, AGE, sex, Diabetes_Lifetime, BMI_R_Cat, Education_recode, Smoking_recode, Insurance_Status, USBorn_Recode, PERWEIGHT, PSU, STRATA, MORTUCODLD,INCIMP1, INCIMP2, INCIMP3, INCIMP4, INCIMP5)%>%
+  mutate(study_exposure=exposure_birth-AGE)%>%
+  filter(!study_exposure==0)%>%
+  filter(Race=="Filipino")%>%
+  na.omit()#omitting missingness from all columns
+
+
+#creating the various imputed data sets
+filipino_data_imputed_datasets<-list(
+  filipino_data_imputed%>%mutate(family_earnings_single_imp=INCIMP1),
+  filipino_data_imputed%>%mutate(family_earnings_single_imp=INCIMP2),
+  filipino_data_imputed%>%mutate(family_earnings_single_imp=INCIMP3),
+  filipino_data_imputed%>%mutate(family_earnings_single_imp=INCIMP4),
+  filipino_data_imputed%>%mutate(family_earnings_single_imp=INCIMP5)
+)
+
+#Setting bounds for income
+filipino_data_imputed_datasets<-lapply(filipino_data_imputed_datasets, function(dataset_i){
+  dataset_i%>%
+  mutate(family_earnings_single_imp_cat=case_when(
+    family_earnings_single_imp%in%c(1:12)~"low income 0-35k",
+    family_earnings_single_imp%in%c(20:42)~"lower-middle 35k-65k",
+    family_earnings_single_imp%in%c(50:65)~"upper-middle 65k-100k",
+    family_earnings_single_imp%in%c(66:70)~"upper class 100k+"
+  ))%>%
+    mutate(family_earnings_single_imp_cat=factor(family_earnings_single_imp_cat, levels=c("lower-middle 35k-65k", "low income 0-35k", "upper-middle 65k-100k", "upper class 100k+")))
+})
+
+filipino_data_imputed_datasets
+
+
+
+#Creating survey weight objects
+
+survey_designs_filipino <- lapply(filipino_data_imputed_datasets, function(dataset_i){#Creating survey designs for each of the datasets
+  svydesign(
+    ids = ~PSU,
+    #strata = ~STRATA,
+    weights = ~PERWEIGHT,
+    nest = TRUE,
+    data = dataset_i
+  )
+}
+  )
+
+########################################################################################################################################################################################################
+#filipino Adjusted Model
+######################
+
+filipino_adjusted_models<-lapply(survey_designs_filipino, function(survey_design_i){#running regressions for each of the imputations
+  
+  svycoxph(Surv(study_exposure, Mort_recode == TRUE) ~ 
+              Diabetes_Lifetime+AGE + sex + Education_recode + 
+             family_earnings_single_imp_cat + Smoking_recode + 
+             Insurance_Status + BMI_R_Cat, 
+           design = survey_design_i)#Using each survey design from imputations
+  
+})
+
+
+
+#Pooling Imputed Models
+filipino_adjusted_pooled_imputated_models <- MIcombine(filipino_adjusted_models)
+
+filipino_adjusted_pooled_imputated_models_summary<-summary(filipino_adjusted_pooled_imputated_models)
+
+filipino_adjusted_output<-filipino_adjusted_pooled_imputated_models_summary%>%
+  mutate(exp_results=exp(results))%>%
+  mutate(exp_lower=exp(`(lower`))%>%
+  mutate(exp_upper=exp(`upper)`))
+
+filipino_adjusted_output#filipino adjusted output
+
+
+########################################################################################################################################################################################################
+#filipino UNadjusted Model
+######################
+
+filipino_un_adjusted_models<-lapply(survey_designs_filipino, function(survey_design_i){#running regressions for each of the imputations
+  
+  svycoxph(Surv(study_exposure, Mort_recode == TRUE) ~ 
+              Diabetes_Lifetime+AGE + sex, 
+           design = survey_design_i)#Using each survey design from imputations
+  
+})
+
+
+
+#Pooling Imputed Models
+filipino_un_adjusted_pooled_imputated_models <- MIcombine(filipino_un_adjusted_models)
+
+filipino_un_adjusted_pooled_imputated_models_summary<-summary(filipino_un_adjusted_pooled_imputated_models)
+
+filipino_un_adjusted_output<-filipino_un_adjusted_pooled_imputated_models_summary%>%
+  mutate(exp_results=exp(results))%>%
+  mutate(exp_lower=exp(`(lower`))%>%
+  mutate(exp_upper=exp(`upper)`))
+
+filipino_un_adjusted_output#filipino UNadjusted output
+
+```
+
+
+
+```{r, Asian Indian}
+#Data collection
+asian_indian_data_imputed<-data%>%
+  select(exposure_birth, Mort_recode, Race, AGE, sex, Diabetes_Lifetime, BMI_R_Cat, Education_recode, Smoking_recode, Insurance_Status, USBorn_Recode, PERWEIGHT, PSU, STRATA, MORTUCODLD,INCIMP1, INCIMP2, INCIMP3, INCIMP4, INCIMP5)%>%
+  mutate(study_exposure=exposure_birth-AGE)%>%
+  filter(!study_exposure==0)%>%
+  filter(Race=="Asian Indian")%>%
+  na.omit()#omitting missingness from all columns
+
+
+#creating the various imputed data sets
+asian_indian_data_imputed_datasets<-list(
+  asian_indian_data_imputed%>%mutate(family_earnings_single_imp=INCIMP1),
+  asian_indian_data_imputed%>%mutate(family_earnings_single_imp=INCIMP2),
+  asian_indian_data_imputed%>%mutate(family_earnings_single_imp=INCIMP3),
+  asian_indian_data_imputed%>%mutate(family_earnings_single_imp=INCIMP4),
+  asian_indian_data_imputed%>%mutate(family_earnings_single_imp=INCIMP5)
+)
+
+#Setting bounds for income
+asian_indian_data_imputed_datasets<-lapply(asian_indian_data_imputed_datasets, function(dataset_i){
+  dataset_i%>%
+  mutate(family_earnings_single_imp_cat=case_when(
+    family_earnings_single_imp%in%c(1:12)~"low income 0-35k",
+    family_earnings_single_imp%in%c(20:42)~"lower-middle 35k-65k",
+    family_earnings_single_imp%in%c(50:65)~"upper-middle 65k-100k",
+    family_earnings_single_imp%in%c(66:70)~"upper class 100k+"
+  ))%>%
+    mutate(family_earnings_single_imp_cat=factor(family_earnings_single_imp_cat, levels=c("lower-middle 35k-65k", "low income 0-35k", "upper-middle 65k-100k", "upper class 100k+")))
+})
+
+asian_indian_data_imputed_datasets
+
+
+
+#Creating survey weight objects
+
+survey_designs_asian_indian <- lapply(asian_indian_data_imputed_datasets, function(dataset_i){#Creating survey designs for each of the datasets
+  svydesign(
+    ids = ~PSU,
+    #strata = ~STRATA,
+    weights = ~PERWEIGHT,
+    nest = TRUE,
+    data = dataset_i
+  )
+}
+  )
+
+########################################################################################################################################################################################################
+#asian_indian Adjusted Model
+######################
+
+asian_indian_adjusted_models<-lapply(survey_designs_asian_indian, function(survey_design_i){#running regressions for each of the imputations
+  
+  svycoxph(Surv(study_exposure, Mort_recode == TRUE) ~ 
+              Diabetes_Lifetime+AGE + sex + Education_recode + 
+             family_earnings_single_imp_cat + Smoking_recode + 
+             Insurance_Status + BMI_R_Cat, 
+           design = survey_design_i)#Using each survey design from imputations
+  
+})
+
+
+
+#Pooling Imputed Models
+asian_indian_adjusted_pooled_imputated_models <- MIcombine(asian_indian_adjusted_models)
+
+asian_indian_adjusted_pooled_imputated_models_summary<-summary(asian_indian_adjusted_pooled_imputated_models)
+
+asian_indian_adjusted_output<-asian_indian_adjusted_pooled_imputated_models_summary%>%
+  mutate(exp_results=exp(results))%>%
+  mutate(exp_lower=exp(`(lower`))%>%
+  mutate(exp_upper=exp(`upper)`))
+
+asian_indian_adjusted_output#asian_indian adjusted output
+
+
+########################################################################################################################################################################################################
+#asian_indian UNadjusted Model
+######################
+
+asian_indian_un_adjusted_models<-lapply(survey_designs_asian_indian, function(survey_design_i){#running regressions for each of the imputations
+  
+  svycoxph(Surv(study_exposure, Mort_recode == TRUE) ~ 
+              Diabetes_Lifetime+AGE + sex, 
+           design = survey_design_i)#Using each survey design from imputations
+  
+})
+
+
+
+#Pooling Imputed Models
+asian_indian_un_adjusted_pooled_imputated_models <- MIcombine(asian_indian_un_adjusted_models)
+
+asian_indian_un_adjusted_pooled_imputated_models_summary<-summary(asian_indian_un_adjusted_pooled_imputated_models)
+
+asian_indian_un_adjusted_output<-asian_indian_un_adjusted_pooled_imputated_models_summary%>%
+  mutate(exp_results=exp(results))%>%
+  mutate(exp_lower=exp(`(lower`))%>%
+  mutate(exp_upper=exp(`upper)`))
+
+asian_indian_un_adjusted_output#asian_indian UNadjusted output
+
+
+
+
+```
+
+
+
+
+######################################################################################################
+SUMMARY OUTPUTS
+#####################################################################################################
+
+
+```{r, summary outputs}
+
+#White
+white_adjusted_output
+white_un_adjusted_output
+
+#Chinese
+chinese_adjusted_output
+chinese_un_adjusted_output
+
+
+#Filipino
+filipino_adjusted_output
+filipino_un_adjusted_output
+
+#Asian Indian
+asian_indian_adjusted_output
+asian_indian_un_adjusted_output
+```
+
+
+
+
+#TROUBLE SHOOTING DELETE LATER (NOT ACTUALLY ASIAN INDIAN) I think the code is right?
+```{r}
+#Data collection
+asian_indian_data_imputed<-data%>%
+  select(exposure_birth, Mort_recode, Race, AGE, sex, Diabetes_Lifetime, BMI_R_Cat, Education_recode, Smoking_recode, Insurance_Status, USBorn_Recode, PERWEIGHT, PSU, STRATA, MORTUCODLD,INCIMP1, INCIMP2, INCIMP3, INCIMP4, INCIMP5)%>%
+  mutate(study_exposure=exposure_birth-AGE)%>%
+  filter(!study_exposure==0)%>%
+  filter(Diabetes_Lifetime=="Diabetic")%>%
+  #filter(Race=="Asian Indian")%>%
+  na.omit()#omitting missingness from all columns
+
+
+#creating the various imputed data sets
+asian_indian_data_imputed_datasets<-list(
+  asian_indian_data_imputed%>%mutate(family_earnings_single_imp=INCIMP1),
+  asian_indian_data_imputed%>%mutate(family_earnings_single_imp=INCIMP2),
+  asian_indian_data_imputed%>%mutate(family_earnings_single_imp=INCIMP3),
+  asian_indian_data_imputed%>%mutate(family_earnings_single_imp=INCIMP4),
+  asian_indian_data_imputed%>%mutate(family_earnings_single_imp=INCIMP5)
+)
+
+#Setting bounds for income
+asian_indian_data_imputed_datasets<-lapply(asian_indian_data_imputed_datasets, function(dataset_i){
+  dataset_i%>%
+  mutate(family_earnings_single_imp_cat=case_when(
+    family_earnings_single_imp%in%c(1:12)~"low income 0-35k",
+    family_earnings_single_imp%in%c(20:42)~"lower-middle 35k-65k",
+    family_earnings_single_imp%in%c(50:65)~"upper-middle 65k-100k",
+    family_earnings_single_imp%in%c(66:70)~"upper class 100k+"
+  ))%>%
+    mutate(family_earnings_single_imp_cat=factor(family_earnings_single_imp_cat, levels=c("lower-middle 35k-65k", "low income 0-35k", "upper-middle 65k-100k", "upper class 100k+")))
+})
+
+asian_indian_data_imputed_datasets
+
+
+
+#Creating survey weight objects
+
+survey_designs_asian_indian <- lapply(asian_indian_data_imputed_datasets, function(dataset_i){#Creating survey designs for each of the datasets
+  svydesign(
+    ids = ~PSU,
+    #strata = ~STRATA,
+    weights = ~PERWEIGHT,
+    nest = TRUE,
+    data = dataset_i
+  )
+}
+  )
+
+########################################################################################################################################################################################################
+#asian_indian Adjusted Model
+######################
+
+asian_indian_adjusted_models<-lapply(survey_designs_asian_indian, function(survey_design_i){#running regressions for each of the imputations
+  
+  svycoxph(Surv(study_exposure, Mort_recode == TRUE) ~ 
+            Race+AGE + sex + Education_recode + 
+             family_earnings_single_imp_cat + Smoking_recode + 
+             Insurance_Status + BMI_R_Cat, 
+           design = survey_design_i)#Using each survey design from imputations
+  
+})
+
+
+
+#Pooling Imputed Models
+asian_indian_adjusted_pooled_imputated_models <- MIcombine(asian_indian_adjusted_models)
+
+asian_indian_adjusted_pooled_imputated_models_summary<-summary(asian_indian_adjusted_pooled_imputated_models)
+
+asian_indian_adjusted_output<-asian_indian_adjusted_pooled_imputated_models_summary%>%
+  mutate(exp_results=exp(results))%>%
+  mutate(exp_lower=exp(`(lower`))%>%
+  mutate(exp_upper=exp(`upper)`))
+
+asian_indian_adjusted_output#asian_indian adjusted output
+
+
+########################################################################################################################################################################################################
+#asian_indian UNadjusted Model
+######################
+
+asian_indian_un_adjusted_models<-lapply(survey_designs_asian_indian, function(survey_design_i){#running regressions for each of the imputations
+  
+  svycoxph(Surv(study_exposure, Mort_recode == TRUE) ~ 
+              Race+AGE + sex, 
+           design = survey_design_i)#Using each survey design from imputations
+  
+})
+
+
+
+#Pooling Imputed Models
+asian_indian_un_adjusted_pooled_imputated_models <- MIcombine(asian_indian_un_adjusted_models)
+
+asian_indian_un_adjusted_pooled_imputated_models_summary<-summary(asian_indian_un_adjusted_pooled_imputated_models)
+
+asian_indian_un_adjusted_output<-asian_indian_un_adjusted_pooled_imputated_models_summary%>%
+  mutate(exp_results=exp(results))%>%
+  mutate(exp_lower=exp(`(lower`))%>%
+  mutate(exp_upper=exp(`upper)`))
+
+asian_indian_un_adjusted_output#asian_indian UNadjusted output
+
+
+
+
+```
+
+
+#############################################################################################'
+###############################################################################################
+##############################################################################################
+Mid May Analysis
+
+
+#############################################################################################'
+###############################################################################################
+##############################################################################################
+
+
+
+```{r, data collection}
+
+data_family_income_imputed<-data%>%
+  select(exposure_birth, Mort_recode, Race, AGE, sex, Diabetes_Lifetime, BMI_R_Cat, Education_recode, Smoking_recode, Insurance_Status, USBorn_Recode, PERWEIGHT, PSU, STRATA, MORTUCODLD,INCIMP1, INCIMP2, INCIMP3, INCIMP4, INCIMP5)%>%
+  mutate(study_exposure=exposure_birth-AGE)%>%
+  filter(!study_exposure==0)%>%
+  na.omit()#omitting missingness from all columns
+#########################SAMPLE SIZE
+data_family_income_imputed%>%#SAMPLE SIZE HERE
+  count(Race)#Number each race after omitting missingness
+
+#Creating list of datasets each with different imputed income variable
+list_imputed_family_income_datasets<-list(
+  data_family_income_imputed%>%mutate(family_earnings_single_imp=INCIMP1),
+  data_family_income_imputed%>%mutate(family_earnings_single_imp=INCIMP2),
+  data_family_income_imputed%>%mutate(family_earnings_single_imp=INCIMP3),
+  data_family_income_imputed%>%mutate(family_earnings_single_imp=INCIMP4),
+  data_family_income_imputed%>%mutate(family_earnings_single_imp=INCIMP5)
+)
+
+
+list_imputed_family_income_datasets<-lapply(list_imputed_family_income_datasets, function(dataset_i){#setting income thresholds
+  dataset_i%>%
+  mutate(family_earnings_single_imp_cat=case_when(
+    family_earnings_single_imp%in%c(1:12)~"low income 0-35k",
+    family_earnings_single_imp%in%c(20:42)~"lower-middle 35k-65k",
+    family_earnings_single_imp%in%c(50:65)~"upper-middle 65k-100k",
+    family_earnings_single_imp%in%c(66:70)~"upper class 100k+"
+  ))%>%
+    mutate(family_earnings_single_imp_cat=factor(family_earnings_single_imp_cat, levels=c("lower-middle 35k-65k", "low income 0-35k", "upper-middle 65k-100k", "upper class 100k+")))
+})
+
+list_imputed_family_income_datasets
+
+
+
+#Creating survey weighted data
+survey_designs_everyone <- lapply(list_imputed_family_income_datasets, function(dataset_i){#Creating survey designs for each of the datasets
+  as_survey(dataset_i,
+    id=PSU,
+    strata=STRATA,
+    weight=PERWEIGHT,
+    nest = TRUE
+  )
+}
+  )
+
+
+
+
+```
+
+```{r, mortality rates}
+
+#checking work
+survey_designs_everyone[[1]]%>%
+  group_by(Diabetes_Lifetime, Race)%>%
+  summarize(
+  Mortality_Rate=survey_mean(Mort_recode)
+  #Mortality_Rate=survey_total(Mort_recode)
+  )
+
+
+#Mortality rates weighted
+lapply(survey_designs_everyone, function(dataset_i){##All of them identical no need to do imputations. 
+  dataset_i%>%
+  group_by(Race)%>%
+  summarize(
+  Mortality_Rate=survey_mean(Mort_recode)
+  )
+})
+
+#Mortality rates weighted
+lapply(survey_designs_everyone, function(dataset_i){##All of them identical no need to do imputations. 
+  dataset_i%>%
+  group_by(Diabetes_Lifetime, Race)%>%
+  summarize(
+  Mortality_Rate=survey_mean(Mort_recode)
+  )
+})
+
+#Unweighted
+list_imputed_family_income_datasets[[1]]%>%
+  group_by(Diabetes_Lifetime, Race)%>%
+  summarize(
+    Num_Ind=n(),
+    Num_Dead=sum(Mort_recode==TRUE),
+    Exposure_Time=sum(study_exposure)
+  )%>%
+  mutate(Mortality_Rate=Num_Dead/Num_Ind)%>%
+  mutate(Mortality_Rate_Per_100_000=Num_Dead/Exposure_Time*100000)
+
+```
+
+
+
+###############################################################
+Table 1
+Using functions from table_functions_output file
+#################################################################
+
+
+```{r, functions for table 1}
+
+table_1_weight_cat<-function(dataset, variable){
+  
+  variable_string_name <- deparse(substitute(variable))
+  column_name<- paste(variable_string_name, "_point_int")
+  
+  dataset%>%
+  group_by(Race,{{variable}}) %>%
+  summarize(
+    survey_mean()
+  )%>%
+  mutate(coef=coef*100)%>%
+  mutate(`_se`=`_se`*100)%>%
+  mutate(t_val=1.96)%>%#Using a fixed t-value of 1.96
+  mutate(lower_bound=coef-t_val*`_se`)%>%
+  mutate(upper_bound=coef+t_val*`_se`)%>%
+  mutate(!!column_name :=  paste0(round(coef, 1), ", (", round(lower_bound, 1), "-", round(upper_bound, 1), ")")) %>%
+    select(Race,!!column_name)
+  #Maybe try to rotate
+}
+
+
+
+table_1_weight_quant<-function(dataset, variable){
+  
+  variable_string_name <- deparse(substitute(variable))
+  column_name<- paste(variable_string_name, "_point_int")
+  
+  dataset%>%
+  group_by(Race) %>%
+  summarize(
+    survey_mean({{variable}})
+  )%>%
+  mutate(t_val=1.96)%>%#Using a fixed t-value of 1.96
+  mutate(lower_bound=coef-t_val*`_se`)%>%
+  mutate(upper_bound=coef+t_val*`_se`)%>%
+  mutate(!!column_name :=  paste0(round(coef, 1), ", (", round(lower_bound, 1), "-", round(upper_bound, 1), ")")) %>%
+    select(Race,!!column_name)
+  #Maybe try to rotate
+}
+
+
+```
+
+```{r, everyone, with and without diabetes table 1}
+data_family_income_imputed<-data%>%
+  select(exposure_birth, Mort_recode, Race, AGE, sex, Diabetes_Lifetime, BMI_R_Cat, Education_recode, Smoking_recode, Insurance_Status, USBorn_Recode, PERWEIGHT, PSU, STRATA, MORTUCODLD,INCIMP1, INCIMP2, INCIMP3, INCIMP4, INCIMP5)%>%
+  mutate(study_exposure=exposure_birth-AGE)%>%
+  mutate(Bach_up=ifelse(Education_recode%in%c("4 years college/Bachelor's degree","Post Bachelor" ), "Above", "Below"))%>%
+  filter(!study_exposure==0)%>%
+  na.omit()#omitting missingness from all columns
+
+data_family_income_imputed%>%
+  count(Race)#Number each race after omitting missingness
+
+#Creating list of datasets each with different imputed income variable
+list_imputed_family_income_datasets<-list(
+  data_family_income_imputed%>%mutate(family_earnings_single_imp=INCIMP1),
+  data_family_income_imputed%>%mutate(family_earnings_single_imp=INCIMP2),
+  data_family_income_imputed%>%mutate(family_earnings_single_imp=INCIMP3),
+  data_family_income_imputed%>%mutate(family_earnings_single_imp=INCIMP4),
+  data_family_income_imputed%>%mutate(family_earnings_single_imp=INCIMP5)
+)
+
+
+list_imputed_family_income_datasets<-lapply(list_imputed_family_income_datasets, function(dataset_i){#setting income thresholds
+  dataset_i%>%
+  mutate(family_earnings_single_imp_cat=case_when(
+    family_earnings_single_imp%in%c(1:12)~"low income 0-35k",
+    family_earnings_single_imp%in%c(20:42)~"lower-middle 35k-65k",
+    family_earnings_single_imp%in%c(50:65)~"upper-middle 65k-100k",
+    family_earnings_single_imp%in%c(66:70)~"upper class 100k+"
+  ))%>%
+    mutate(family_earnings_single_imp_cat=factor(family_earnings_single_imp_cat, levels=c("lower-middle 35k-65k", "low income 0-35k", "upper-middle 65k-100k", "upper class 100k+")))
+})
+
+list_imputed_family_income_datasets
+
+
+#Creating survey weighted data
+survey_designs_everyone <- lapply(list_imputed_family_income_datasets, function(dataset_i){#Creating survey designs for each of the datasets
+  as_survey(dataset_i,
+    id=PSU,
+    strata=STRATA,
+    weight=PERWEIGHT,
+    nest = TRUE
+  )
+}
+  )
+
+
+
+```
+
+
+```{r, outputs table 1}
+
+
+#On non imputed data just take the first dataset
+table_1_weight_cat(survey_designs_everyone[[1]], Education_recode)
+table_1_weight_cat(survey_designs_everyone[[1]], Bach_up) #October 22 2025#######################################################
+
+table_1_weight_cat(survey_designs_everyone[[1]], sex)
+
+table_1_weight_cat(survey_designs_everyone[[1]], Insurance_Status)
+table_1_weight_cat(survey_designs_everyone[[1]], USBorn_Recode)
+table_1_weight_cat(survey_designs_everyone[[1]], BMI_R_Cat)
+
+
+
+table_1_weight_cat(survey_designs_everyone[[1]], Smoking_recode)
+
+table_1_weight_cat(survey_designs_everyone[[1]], Diabetes_Lifetime)
+
+
+table_1_weight_cat(survey_designs_everyone[[1]], Mort_recode)
+
+
+table_1_weight_quant(survey_designs_everyone[[1]], AGE)
+```
+
+###Table 1 Income (End May 2025)
+
+
+<!-- ```{r, table 1 imputations income} -->
+<!-- survey_designs_everyone -->
+<!-- survey_designs_everyone_income_table1<-lapply(survey_designs_everyone, function(imputation_i){#running table 1 function for income each imputation -->
+<!--   imputation_i%>% -->
+<!--   group_by(Race,family_earnings_single_imp_cat) %>% -->
+<!--   summarize( -->
+<!--     survey_mean() -->
+<!--   ) -->
+
+<!-- }) -->
+
+
+
+<!-- ``` -->
+
+
+##AGE ADJUSTED DIABETES PREVALENCE END MAY 2025
+
+```{r, data prep age adjusted diabetes prevalence}
+data_age_diabetes<-data%>%#Same as the data family income imputed
+  select(exposure_birth, Mort_recode, Race, AGE, sex, Diabetes_Lifetime, BMI_R_Cat, Education_recode, Smoking_recode, Insurance_Status, USBorn_Recode, PERWEIGHT, PSU, STRATA, MORTUCODLD,INCIMP1, INCIMP2, INCIMP3, INCIMP4, INCIMP5)%>%
+  mutate(study_exposure=exposure_birth-AGE)%>%
+  filter(!study_exposure==0)%>%
+  na.omit()#omitting missingness from all columns
+
+data_age_diabetes%>%
+  count(Race)#Number each race after omitting missingness
+#adding age groups
+data_age_diabetes<-data_age_diabetes%>%
+  mutate(AgeGroup=factor(case_when(
+    AGE%in%c(0)~"<1",
+    AGE%in%c(1:4)~"1-4",
+    AGE%in%c(5:9)~"5-9",
+    AGE%in%c(10:14)~"10-14",
+    AGE%in%c(15:19)~"15-19",
+    AGE%in%c(20:24)~"20-24",
+    AGE%in%c(25:29)~"25-29",
+    AGE%in%c(30:34)~"30-34",
+    AGE%in%c(35:39)~"35-39",
+    AGE%in%c(40:44)~"40-44",
+    AGE%in%c(45:49)~"45-49",
+    AGE%in%c(50:54)~"50-54",
+    AGE%in%c(55:59)~"55-59",
+    AGE%in%c(60:64)~"60-64",
+    AGE%in%c(65:69)~"65-69",
+    AGE%in%c(70:74)~"70-74",
+    AGE%in%c(75:79)~"75-79",
+    AGE%in%c(80:84)~"80-84",
+    AGE>=85~"85+",
+    TRUE~"Check")))
+
+
+data_age_diabetes%>% #counting number of each group
+  group_by(Race)%>%
+  count(AgeGroup)
+
+
+```
+
+
+```{r, data weighting and prevalence calculation age adjusted diabetes prevalence}
+data_age_diabetes_w<-as_survey(data_age_diabetes,
+                         id=PSU,
+                         weight=PERWEIGHT,
+                         strata=STRATA,
+                         nest=TRUE)
+
+
+
+Prevalences_Diabetes_Race_Age<-data_age_diabetes_w%>%
+  group_by(Race,AgeGroup, Diabetes_Lifetime)%>%
+  summarize(
+    survey_mean()
+  )%>%
+  filter(Diabetes_Lifetime=="Diabetic")%>%
+  arrange(Race,AgeGroup)
+
+```
+
+```{r, weighting to 2000 census}
+Census_2000<-surveil::standard%>%#2000 census population from the surveil package. Need to review what the denominator is? The Shah paper used the 2000 census
+  mutate(AgeGroup=factor(age))
+
+Census_2000<-Census_2000%>%
+  mutate(AgeProp=standard_pop/sum(standard_pop))
+
+Census_2000
+
+#Merging with dataset
+
+Diabetes_Race_Age_Prop<-left_join(Prevalences_Diabetes_Race_Age, Census_2000, by="AgeGroup")
+
+```
+
+
+```{r, output age adjusted diabetes prevalence}
+
+Diabetes_Race_Age_Prop
+
+
+Diabetes_Race_Age_Prop%>%
+  #mutate(mortality_rate_2=ifelse(mortality_rate<=0, 0, mortality_rate))%>%#getting the entire period?
+  group_by(Race)%>%
+  summarize(
+    Diabetes_Race=sum(coef*AgeProp),
+    Diabetes_Race_SE=
+      sum(
+      sqrt(
+      (`_se`*AgeProp)^2)
+      )
+    )%>%
+  mutate(Diabetes_Race=Diabetes_Race*100)%>%
+  mutate(lower_bound=Diabetes_Race-1.96*Diabetes_Race_SE*100)%>%
+  mutate(upper_bound=Diabetes_Race+1.96*Diabetes_Race_SE*100)%>%
+  mutate(point_95CI=paste0(round(Diabetes_Race,2), " (", round(lower_bound,2), ", ", round(upper_bound,2), ")"))
+```
+
+
+#Total count of people
+```{r, total counts July 2025}
+data_family_income_imputed<-data%>%
+  select(exposure_birth, Mort_recode, Race, AGE, sex, Diabetes_Lifetime, BMI_R_Cat, Education_recode, Smoking_recode, Insurance_Status, USBorn_Recode, PERWEIGHT, PSU, STRATA, MORTUCODLD,INCIMP1, INCIMP2, INCIMP3, INCIMP4, INCIMP5)%>%
+  mutate(study_exposure=exposure_birth-AGE)%>%
+  filter(!study_exposure==0)%>%
+  na.omit()
+
+
+
+data_total_count_weighted<-as_survey(data_family_income_imputed,
+                         id=PSU,
+                         weight=PERWEIGHT,
+                         strata=STRATA,
+                         nest=TRUE)
+
+
+data_total_count_weighted%>%
+  #group_by(Race)%>%
+  summarize(
+    survey_total()
+  )
+
+
+
+data_family_income_imputed%>%
+  summarize(
+    weighted_sample_size = sum(PERWEIGHT, na.rm = TRUE)
+  )
+
+length(unique(data$YEAR))
+```
+
+
+##################
+DATA FOREST PLOT July 10, 2025
+###################
+
+
+```{r, forrest plot visualization}
+adjusted_race_diabetes_forrest <- data.frame(
+  Race = c("White", "Chinese", "Filipino", "Asian Indian"),
+  Point_Estimate = c(1, 0.905, 0.75, 0.668),
+  Lower_CI = c(1, 0.776, 0.709, 0.495),
+  Upper_CI = c(1, 1.055, 0.793, 0.901)
+)
+
+
+
+ggplot(adjusted_race_diabetes_forrest, aes(y =Race,
+                        x = Point_Estimate, 
+                        xmin = Lower_CI, xmax = Upper_CI)) +
+  geom_point(size = 3, color = "black") +
+  geom_errorbarh(height = 0.2, color = "gray40") +
+  geom_vline(xintercept = 1, linetype = "dashed") +
+  labs(x = "Hazard Ratio (95% CI)", y = "", title = "Hazard Ratios for Asian American\nSubgroups with Diabetes") +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    axis.text.y = element_text(size = 12),
+    axis.title.x = element_text(size = 13)
+  )+
+  xlim(c(0,1.25))
+```
+
+
+
+#Unadjusted DM Race Model July 11 2025
+##
+
+Only those with diabetes
+```{r, only those with diabetes unadjusted}
+data_family_income_imputed_unadjusted<-data%>%
+  select(exposure_birth, Mort_recode, Race, AGE, sex, Diabetes_Lifetime, PERWEIGHT, PSU, STRATA, MORTUCODLD,INCIMP1, INCIMP2, INCIMP3, INCIMP4, INCIMP5)%>%
+  mutate(study_exposure=exposure_birth-AGE)%>%
+  filter(!study_exposure==0)%>%
+  filter(Diabetes_Lifetime=="Diabetic")%>%
+  na.omit()#omitting missingness from all columns
+
+
+
+survey_design_unadjusted_dm <-svydesign(
+    ids = ~PSU,
+    #strata = ~STRATA,
+    weights = ~PERWEIGHT,
+    nest = TRUE,
+    data =data_family_income_imputed_unadjusted
+  )
+
+  
+unadjusted_dm_output<-svycoxph(Surv(study_exposure, Mort_recode == TRUE) ~ 
+             Race + AGE + sex, #unadjusted model
+           design = survey_design_unadjusted_dm)
+  
+summary(unadjusted_dm_output)
+
+```
+
+
+
+
+####October 2025
+
+
+```{r}
+
+data_family_income_imputed<-data%>%
+  select(exposure_birth, Mort_recode, Race, AGE, sex, Diabetes_Lifetime, BMI_R_Cat, Education_recode, Smoking_recode, Insurance_Status, USBorn_Recode, PERWEIGHT, PSU, STRATA, MORTUCODLD,INCIMP1, INCIMP2, INCIMP3, INCIMP4, INCIMP5)%>%
+  mutate(study_exposure=exposure_birth-AGE)%>%
+  filter(!study_exposure==0)%>%
+  na.omit()
+
+
+
+data_total_count_weighted<-as_survey(data_family_income_imputed,
+                         id=PSU,
+                         weight=PERWEIGHT,
+                         strata=STRATA,
+                         nest=TRUE)
+
+
+svychisq(~ Race + USBorn_Recode, design = data_total_count_weighted, statistic = "F")
+
+
+
+library(srvyr)
+
+data_total_count_weighted %>%
+  group_by(Race) %>%
+  summarise(
+    Q25 = quantile(study_exposure, 0.25, na.rm = TRUE),
+    Median = quantile(study_exposure, 0.50, na.rm = TRUE),
+    Q75 = quantile(study_exposure, 0.75, na.rm = TRUE)
+  )
+
+
+data_total_count_weighted %>%
+  group_by(Diabetes_Lifetime) %>%
+  summarise(
+    Q25 = quantile(study_exposure, 0.25, na.rm = TRUE),
+    Median = quantile(study_exposure, 0.50, na.rm = TRUE),
+    Q75 = quantile(study_exposure, 0.75, na.rm = TRUE),
+    mean=mean(study_exposure, na.rm=TRUE)
+  )
+
+```
+
+
+###Education summation table 1 October 22, 2025
+
+```{r}
+
+
+unique(data$Education_recode)
+
+data_education<-data%>%
+  mutate(study_exposure=exposure_birth-AGE)%>%
+#filter(!study_exposure==0)%>%
+  #select(Education_recode)%>%
+  mutate(Bach_up=ifelse(Education_recode%in%c("4 years college/Bachelor's degree","Post Bachelor" ), "Above", "Below"))
+
+####################
+table_1_weight_cat<-function(dataset, variable){
+  
+  variable_string_name <- deparse(substitute(variable))
+  column_name<- paste(variable_string_name, "_point_int")
+  
+  dataset%>%
+  group_by(Race,{{variable}}) %>%
+  summarize(
+    survey_mean()
+  )%>%
+  mutate(coef=coef*100)%>%
+  mutate(`_se`=`_se`*100)%>%
+  mutate(t_val=1.96)%>%#Using a fixed t-value of 1.96
+  mutate(lower_bound=coef-t_val*`_se`)%>%
+  mutate(upper_bound=coef+t_val*`_se`)
+}
+
+#####################
+
+
+data_education_weighted<-as_survey(data_education,
+                         id=PSU,
+                         weight=PERWEIGHT,
+                         strata=STRATA,
+                         nest=TRUE)
+
+table_1_weight_cat(data_education_weighted, Education_recode)
+
+
+
+```
+
